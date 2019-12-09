@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::io::Result as StdIoResult;
+use std::io;
 use mio::{Evented, Poll, Token, Ready, PollOpt};
 use mio::net::{TcpStream, TcpListener};
 use crate::net::peer::Peer;
@@ -26,15 +26,15 @@ impl Listener {
 }
 
 impl Evented for Listener {
-    fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> StdIoResult<()> {
+    fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
         self.listener.register(poll, token, interest, opts)
     }
 
-    fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> StdIoResult<()> {
+    fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
         self.listener.reregister(poll, token, interest, opts)
     }
 
-    fn deregister(&self, poll: &Poll) -> StdIoResult<()> {
+    fn deregister(&self, poll: &Poll) -> io::Result<()> {
         self.listener.deregister(poll)
     }
 }
