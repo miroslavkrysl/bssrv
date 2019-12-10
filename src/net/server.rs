@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use mio::{Poll, Events, Token, Ready, PollOpt, Evented, Event};
+use mio::{Poll, Events, Token, Ready, PollOpt, Event, Evented};
 use rand::Rng;
 use crate::net::{Listener, Peer};
 
@@ -8,7 +8,7 @@ pub struct Server {
     poll: Poll,
     listener: Listener,
     listener_token: Token,
-    peers: HashMap<Token, Peer>
+    peers: HashMap<Token, Peer>,
 }
 
 impl Server {
@@ -20,11 +20,13 @@ impl Server {
             poll,
             listener,
             listener_token: Token(0),
-            peers: HashMap::new()
+            peers: HashMap::new(),
         }
     }
 
     pub fn run(&mut self) {
+        println!("running");
+
         // TODO: register error handling
         self.poll.register(&self.listener,
                            self.listener_token,
@@ -38,6 +40,7 @@ impl Server {
             self.poll.poll(&mut events, None).unwrap();
 
             for event in events.iter() {
+                // TODO: notify upper layer about event
                 if event.token() == self.listener_token {
                     self.listener_event(&event);
                 } else {
@@ -57,12 +60,20 @@ impl Server {
     fn peer_event(&mut self, event: &Event) {
         let token = event.token();
 
-        if let Some(mut peer) = self.peers.get_mut(&token) {
-            peer.handle_io(&event);
+        match self.peers.get_mut(&token) {
+            Some(peer) => {
+                peer.handle_io(event.readiness());
 
-            if peer.is_closed() {
-                self.deregister_peer(&token);
+                if peer.is_closed() {
+                    self.deregister_peer(&token);
+                } else {
+                    self.poll.reregister(peer as &dyn Evented,
+                                         token,
+                                         peer.interests(),
+                                         PollOpt::level()).unwrap();
+                }
             }
+            None => {}
         }
     }
 
@@ -80,9 +91,9 @@ impl Server {
 
         // TODO: register error handling
         self.poll.register(&peer,
-                      token,
-                      Ready::readable(),
-                      PollOpt::level()).unwrap();
+                           token,
+                           peer.interests(),
+                           PollOpt::level()).unwrap();
 
         self.peers.insert(token, peer);
     }

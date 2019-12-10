@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::io;
 use mio::{Evented, Poll, Token, Ready, PollOpt};
-use mio::net::{TcpStream, TcpListener};
+use mio::net::TcpListener;
 use crate::net::peer::Peer;
 
 pub struct Listener {
