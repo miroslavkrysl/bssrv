@@ -4,7 +4,7 @@ pub trait Event<C> {
     fn handle(&self, context: &mut C);
 }
 
-pub struct EventHandler<E, C> {
+pub struct EventHandler<E: Event, C> {
     event_sender: Sender<E>,
     event_receiver: Receiver<E>,
     context: C
