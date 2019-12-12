@@ -1,15 +1,14 @@
+use std::collections::VecDeque;
+use std::io;
+
 mod server;
 mod listener;
 mod peer;
 
-pub use server::Server;
-pub use listener::Listener;
-pub use peer::Peer;
+pub trait Codec {
+    type In;
+    type Out;
 
-pub type PeerId = usize;
-
-pub trait HandleIO {
-    fn incoming(peer_id: PeerId, data: Vec<u8>);
-    fn new_peer(peer_id: PeerId);
-    fn closed_peer(peer_id: PeerId);
+    fn decode(&mut self, buffer: &mut VecDeque<u8>) -> Result<Option<In>, io::Error>;
+    fn encode(&mut self, message: Out, into: &mut VecDeque<u8>) -> io::Result<()>;
 }
