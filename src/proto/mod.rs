@@ -1,4 +1,7 @@
 mod message;
+mod deserialize;
+
+pub use message::ClientMessage;
 
 const MESSAGE_END: char = '\n';
 const PAYLOAD_START: char = ':';

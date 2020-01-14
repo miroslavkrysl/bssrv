@@ -7,11 +7,11 @@ use std::collections::HashMap;
 pub enum DomainErrorKind {
     InvalidLength,
     InvalidCharacters,
-    OutOfRange,
+    OutOfRange
 }
 
 /// An error indicating that a value is out of its domain.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DomainError {
     /// Kind of domain error.
     kind: DomainErrorKind,
@@ -21,7 +21,7 @@ pub struct DomainError {
 
 impl DomainError {
     /// Create new domain error of given kind and a message which describes the cause.
-    fn new(kind: DomainErrorKind, because: String) -> Self {
+    pub fn new(kind: DomainErrorKind, because: String) -> Self {
         DomainError {
             kind,
             because,
@@ -34,7 +34,7 @@ impl Display for DomainError {
         match self.kind {
             DomainErrorKind::InvalidLength => write!(f, "Invalid length: {}", self.because),
             DomainErrorKind::InvalidCharacters => write!(f, "Invalid characters: {}", self.because),
-            DomainErrorKind::OutOfRange => write!(f, "Out of range: {}", self.because),
+            DomainErrorKind::OutOfRange => write!(f, "Out of range: {}", self.because)
         }
     }
 }
@@ -57,7 +57,7 @@ impl Nickname {
             return Err(
                 DomainError::new(
                     DomainErrorKind::InvalidLength,
-                    format!("Nickname must have 3 - 32 characters, but has {}.", nickname.len())));
+                    format!("Nickname must have 3 - 16 characters, but has {}.", nickname.len())));
         }
 
         if !nickname.chars().all(|c| c.is_alphanumeric()) {
@@ -72,6 +72,12 @@ impl Nickname {
 
     pub fn get(&self) -> &String {
         &self.nickname
+    }
+}
+
+impl Display for Nickname {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.nickname)
     }
 }
 
@@ -107,31 +113,34 @@ impl SessionKey {
     }
 }
 
+impl Display for SessionKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.session_key)
+    }
+}
 
 // ---ShipId---
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct ShipId {
-    id: u8
+pub enum ShipKind {
+    AircraftCarrier,
+    Battleship,
+    Cruiser,
+    Destroyer,
+    PatrolBoat
 }
 
-impl ShipId {
-    pub fn new(id: u8) -> Result<Self, DomainError> {
-        if id >= 5 {
-            return Err(
-                DomainError::new(
-                    DomainErrorKind::OutOfRange,
-                    format!("ShipId must be between 0 - 4. {} given.", id)));
+impl Display for ShipKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            ShipKind::AircraftCarrier => write!(f, "AircraftCarrier 5"),
+            ShipKind::Battleship => write!(f, "Battleship 4"),
+            ShipKind::Cruiser => write!(f, "Cruiser 3"),
+            ShipKind::Destroyer => write!(f, "Destroyer 2"),
+            ShipKind::PatrolBoat => write!(f, "PatrolBoat 1"),
         }
-
-        Ok(ShipId { id })
-    }
-
-    pub fn get(&self) -> u8 {
-        self.id
     }
 }
-
 
 // ---Position---
 
@@ -173,6 +182,12 @@ impl Position {
 }
 
 
+impl Display for Position {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "({}, {})", self.row, self.col)
+    }
+}
+
 // ---Orientation---
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -183,15 +198,34 @@ pub enum Orientation {
     South,
 }
 
+impl Display for Orientation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Orientation::East => write!(f, "east"),
+            Orientation::North => write!(f, "north"),
+            Orientation::West => write!(f, "west"),
+            Orientation::South => write!(f, "south"),
+        }
+    }
+}
+
 
 // ---Who---
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Who {
-    YOU,
-    OPPONENT,
+    You,
+    Opponent,
 }
 
+impl Display for Who {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Who::You => write!(f, "you"),
+            Who::Opponent => write!(f, "opponent")
+        }
+    }
+}
 
 // ---Placement---
 
@@ -212,6 +246,12 @@ impl Placement {
 
     pub fn orientation(&self) -> Orientation {
         self.orientation
+    }
+}
+
+impl Display for Placement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "({}, {})", self.position, self.orientation)
     }
 }
 
@@ -240,26 +280,56 @@ impl Layout {
     }
 }
 
+impl Display for Layout {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        let mut string = String::from("{");
+
+        string.push_str(
+            &self.placements.iter()
+                .map(|p| format!("{}", p))
+                .collect::<Vec<_>>().join(", "));
+
+        string.push_str("}");
+
+        write!(f, "{}", string)
+    }
+}
+
 
 // ---SunkShips---
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SunkShips {
-    ships: HashMap<ShipId, Placement>
+    ships: HashMap<ShipKind, Placement>
 }
 
 impl SunkShips {
-    pub fn new(ships: HashMap<ShipId, Placement>) -> Self {
+    pub fn new(ships: HashMap<ShipKind, Placement>) -> Self {
         SunkShips { ships }
     }
 
-    pub fn ships(&self) -> &HashMap<ShipId, Placement> {
+    pub fn ships(&self) -> &HashMap<ShipKind, Placement> {
         &self.ships
     }
 }
 
+impl Display for SunkShips {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        let mut string = String::from("{");
 
-// ---Layout---
+        string.push_str(
+            &self.ships.iter()
+                .map(|(k, p)| format!("{} ({})", k, p))
+                .collect::<Vec<_>>().join(", "));
+
+        string.push_str("}");
+
+        write!(f, "{}", string)
+    }
+}
+
+
+// ---Hits---
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hits {
@@ -278,6 +348,21 @@ impl Hits {
     }
 }
 
+impl Display for Hits {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        let mut string = String::from("{");
+
+        string.push_str(
+            &self.positions.iter()
+                .map(|p| format!("{}", p))
+                .collect::<Vec<_>>().join(", "));
+
+        string.push_str("}");
+
+        write!(f, "{}", string)
+    }
+}
+
 
 // ---RestoreState---
 
@@ -293,4 +378,21 @@ pub enum RestoreState {
     GameOver {
         winner: Who
     },
+}
+
+impl Display for RestoreState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            RestoreState::Lobby => write!(f, "lobby"),
+            RestoreState::Game {
+                on_turn,
+                player_board,
+                opponent_board,
+                sunk_ships
+            } => write!(f, "game ({}, {}, {}, {})", on_turn, player_board, opponent_board, sunk_ships),
+            RestoreState::GameOver {
+                winner
+            } => write!(f, "game over ({})", winner),
+        }
+    }
 }
