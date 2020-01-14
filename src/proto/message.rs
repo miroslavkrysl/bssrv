@@ -32,40 +32,39 @@ impl Display for ClientMessage {
     }
 }
 
-//
-//pub enum ServerMessage {
-//    IllegalState,
-//
-//    AliveOk,
-//
-//    RestoreSessionOk(RestoreState),
-//    RestoreSessionFail,
-//
-//    LoginOk(SessionKey),
-//    LoginOkFail,
-//
-//    JoinGameWait,
-//    JoinGameOk(Nickname),
-//
-//    LayoutOk,
-//    LayoutFail,
-//
-//    ShootHit,
-//    ShootMiss,
-//    ShootSunk(Position),
-//
-//    LeaveGameOk,
-//
-//    DisconnectOk,
-//
-//    Disconnect,
-//    OpponentJoined(Nickname),
-//    OpponentReady,
-//    OpponentLeft,
-//    OpponentMissed(Position),
-//    OpponentHit(Position),
-//    GameOver(Who),
-//}
+
+pub enum ServerMessage {
+    IllegalState,
+
+    AliveOk,
+
+    RestoreSessionOk(RestoreState),
+    RestoreSessionFail,
+
+    LoginOk(SessionKey),
+    LoginOkFail,
+
+    JoinGameWait,
+    JoinGameOk(Nickname),
+
+    LayoutOk,
+    LayoutFail,
+
+    ShootHit,
+    ShootMiss,
+    ShootSunk(Position),
+
+    LeaveGameOk,
+
+    DisconnectOk,
+
+    Disconnect,
+    OpponentJoined(Nickname),
+    OpponentReady,
+    OpponentLeft,
+    OpponentMissed(Position),
+    OpponentHit(Position)
+}
 
 //impl ServerMessage {
 //    pub fn deserialize(serialized: &str) -> Self {

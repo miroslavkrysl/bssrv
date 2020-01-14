@@ -374,10 +374,7 @@ pub enum RestoreState {
         player_board: Hits,
         opponent_board: Hits,
         sunk_ships: SunkShips
-    },
-    GameOver {
-        winner: Who
-    },
+    }
 }
 
 impl Display for RestoreState {
@@ -389,10 +386,7 @@ impl Display for RestoreState {
                 player_board,
                 opponent_board,
                 sunk_ships
-            } => write!(f, "game ({}, {}, {}, {})", on_turn, player_board, opponent_board, sunk_ships),
-            RestoreState::GameOver {
-                winner
-            } => write!(f, "game over ({})", winner),
+            } => write!(f, "game ({}, {}, {}, {})", on_turn, player_board, opponent_board, sunk_ships)
         }
     }
 }
