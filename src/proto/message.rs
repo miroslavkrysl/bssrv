@@ -22,7 +22,8 @@ impl Display for ClientMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             ClientMessage::Alive => write!(f, "[alive]"),
-            ClientMessage::RestoreSession(session_key) => write!(f, "[restore session: {}]", session_key),
+            ClientMessage::RestoreSession(session_key) =>
+                write!(f, "[restore session: {}]", session_key),
             ClientMessage::Login(nickname) => write!(f, "[login: {}]", nickname),
             ClientMessage::JoinGame => write!(f, "[join game]"),
             ClientMessage::Layout(layout) => write!(f, "[layout: {}]", layout),
@@ -33,6 +34,7 @@ impl Display for ClientMessage {
     }
 }
 
+/// A message sending to a client.
 pub enum ServerMessage {
     IllegalState,
     AliveOk,
@@ -45,7 +47,7 @@ pub enum ServerMessage {
     LayoutOk,
     LayoutFail,
     ShootHit,
-    ShootMiss,
+    ShootMissed,
     ShootSunk(ShipKind, Position),
     LeaveGameOk,
     DisconnectOk,
@@ -55,4 +57,34 @@ pub enum ServerMessage {
     OpponentLeft,
     OpponentMissed(Position),
     OpponentHit(Position)
+}
+
+impl Display for ServerMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            ServerMessage::IllegalState => write!(f, "[illegal state]"),
+            ServerMessage::AliveOk => write!(f, "[alive ok]"),
+            ServerMessage::RestoreSessionOk(restore_state) =>
+                write!(f, "[restore session: {}]", restore_state),
+            ServerMessage::RestoreSessionFail => write!(f, "[restore session fail]"),
+            ServerMessage::LoginOk(session_key) => write!(f, "[login ok: {}]", session_key),
+            ServerMessage::LoginOkFail => write!(f, "[login fail]"),
+            ServerMessage::JoinGameWait => write!(f, "[join game wait]"),
+            ServerMessage::JoinGameOk(opponent) => write!(f, "[join game ok: {}]", opponent),
+            ServerMessage::LayoutOk => write!(f, "[layout ok]"),
+            ServerMessage::LayoutFail => write!(f, "[layout fail]"),
+            ServerMessage::ShootHit => write!(f, "[shoot hit]"),
+            ServerMessage::ShootMissed => write!(f, "[shoot missed]"),
+            ServerMessage::ShootSunk(kind, placement) =>
+                write!(f, "[shoot sunk: {}, {}]", kind, placement),
+            ServerMessage::LeaveGameOk => write!(f, "[leave game ok]"),
+            ServerMessage::DisconnectOk => write!(f, "[disconnect ok]"),
+            ServerMessage::Disconnect => write!(f, "[disconnect]"),
+            ServerMessage::OpponentJoined(opponent) => write!(f, "[opponent joined: {}]", opponent),
+            ServerMessage::OpponentReady => write!(f, "[opponent ready]"),
+            ServerMessage::OpponentLeft => write!(f, "[opponent left]"),
+            ServerMessage::OpponentMissed(position) => write!(f, "[opponent missed: {}]", position),
+            ServerMessage::OpponentHit(position) => write!(f, "[opponent hit: {}]", position),
+        }
+    }
 }
