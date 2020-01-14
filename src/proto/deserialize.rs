@@ -1,12 +1,12 @@
 //! Client messages deserialization logic
 
-use crate::types::{SessionKey, Nickname, Layout, Position, DomainError, Placement, Orientation, DomainErrorKind};
-use crate::proto::{find, PAYLOAD_START, ESCAPE, escape, PAYLOAD_ITEM_SEPARATOR, split, unescape, ClientMessage};
-use std::collections::LinkedList;
+use crate::types::{SessionKey, Nickname, Layout, Position, Placement, Orientation, DomainErrorKind};
+use crate::proto::ClientMessage;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use std::error::Error;
 use std::num::ParseIntError;
+use crate::proto::codec::{find, Payload, PAYLOAD_START, ESCAPE};
 
 // ---ERRORS---
 
@@ -34,7 +34,7 @@ impl Display for DeserializeErrorKind {
 
 impl DeserializeError {
     /// Create new deserialization error of given kind.
-    fn new(kind: DeserializeErrorKind) -> Self {
+    pub fn new(kind: DeserializeErrorKind) -> Self {
         DeserializeError {
             kind
         }
@@ -186,100 +186,6 @@ impl ClientMessage {
         }
     }
 }
-
-/// A collection of payload items. That can be appended to back of the payload
-/// or taken from the front of the payload.
-struct Payload {
-    items: LinkedList<String>
-}
-
-impl Payload {
-    /// Create an empty payload - it has no items.
-    pub fn empty() -> Self {
-        Payload {
-            items: LinkedList::new()
-        }
-    }
-
-    /// Deserialize payload items from string.
-    /// Even empty string is a non-empty payload consisting of one empty string item.
-    pub fn deserialize(serialized: &str) -> Self {
-        let parts = split(serialized, PAYLOAD_ITEM_SEPARATOR, ESCAPE);
-
-        let items = parts.iter()
-            .map(|part| unescape(part, &[ESCAPE, PAYLOAD_ITEM_SEPARATOR], ESCAPE))
-            .collect();
-
-        Payload {
-            items
-        }
-    }
-
-    /// Serialize payload items into a string.
-    /// If the payload is empty None is returned.
-    pub fn serialize(&self) -> Option<String> {
-        if self.items.is_empty() {
-            return None;
-        }
-
-        let escaped = self.items.iter()
-            .map(|item| escape(&item, &[ESCAPE, PAYLOAD_ITEM_SEPARATOR], ESCAPE))
-            .collect::<Vec<_>>();
-
-        let mut serialized = String::new();
-
-        let mut iterator = escaped.iter().peekable();
-        loop {
-            match iterator.next() {
-                Some(item) => {
-                    serialized.push_str(item);
-                }
-                None => {
-                    break;
-                }
-            }
-
-            if let Some(_) = iterator.peek() {
-                serialized.push(PAYLOAD_ITEM_SEPARATOR);
-            }
-        }
-
-        Some(serialized)
-    }
-
-    /// Add a string item.
-    pub fn add_string(&mut self, string: String) {
-        self.items.push_back(string);
-    }
-
-    /// Add an int item, which is serialized into a string.
-    pub fn add_int(&mut self, int: i32) {
-        self.items.push_back(int.to_string());
-    }
-
-    /// Take next item from the front of the payload.
-    fn take_item(&mut self) -> Result<String, DeserializeError> {
-        if let Some(item) = self.items.pop_front() {
-            Ok(item)
-        } else {
-            Err(DeserializeError::new(DeserializeErrorKind::NoMorePayloadItems))
-        }
-    }
-
-    /// Get a next string item.
-    pub fn take_string(&mut self) -> Result<String, DeserializeError> {
-        self.take_item()
-    }
-
-    /// Get an u8 integer item, which is deserialized from string.
-    /// The item is taken from the payload even if the deserialization fails.
-    pub fn take_u8(&mut self) -> Result<u8, DeserializeError> {
-        let item = self.take_item()?;
-        let int = item.parse()?;
-        Ok(int)
-    }
-}
-
 
 /// A trait for items that can be deserialized from a message [Payload](Payload).
 trait DeserializeFromPayload: Sized {

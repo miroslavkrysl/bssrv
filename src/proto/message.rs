@@ -1,6 +1,7 @@
-//! Battleships protocol message types.
+//! Battleships protocol message types,
+//! And payload container.
 
-use crate::types::{SessionKey, Nickname, Layout, Position};
+use crate::types::{SessionKey, Nickname, Layout, Position, RestoreState, ShipKind};
 use std::fmt::{Formatter, Display};
 use std::fmt;
 
@@ -32,32 +33,22 @@ impl Display for ClientMessage {
     }
 }
 
-
 pub enum ServerMessage {
     IllegalState,
-
     AliveOk,
-
     RestoreSessionOk(RestoreState),
     RestoreSessionFail,
-
     LoginOk(SessionKey),
     LoginOkFail,
-
     JoinGameWait,
     JoinGameOk(Nickname),
-
     LayoutOk,
     LayoutFail,
-
     ShootHit,
     ShootMiss,
-    ShootSunk(Position),
-
+    ShootSunk(ShipKind, Position),
     LeaveGameOk,
-
     DisconnectOk,
-
     Disconnect,
     OpponentJoined(Nickname),
     OpponentReady,
@@ -65,58 +56,3 @@ pub enum ServerMessage {
     OpponentMissed(Position),
     OpponentHit(Position)
 }
-
-//impl ServerMessage {
-//    pub fn deserialize(serialized: &str) -> Self {
-//        // deserialize header
-//        let payload_start = find(serialized, 0, PAYLOAD_START, ESCAPE);
-//
-//        let header;
-//        let mut payload = None;
-//
-//        match payload_start {
-//            None => {
-//                // no payload
-//                header = serialized;
-//            }
-//            Some(i) => {
-//                // some payload
-//                header = &serialized[..i];
-//                payload = Some(&serialized[(i + 1)..]);
-//            }
-//        }
-//
-//        match header {
-//            "illegal_state" => ServerMessage::IllegalState,
-//            "alive_ok" => ServerMessage::,
-//
-//            RestoreSessionOk(RestoreState),
-//            RestoreSessionFail,
-//
-//            LoginOk(SessionKey),
-//            LoginOkFail,
-//
-//            JoinGameWait,
-//            JoinGameOk(Nickname),
-//
-//            LayoutOk,
-//            LayoutFail,
-//
-//            ShootHit,
-//            ShootMiss,
-//            ShootSunk(Position),
-//
-//            LeaveGameOk,
-//
-//            DisconnectOk,
-//
-//            Disconnect,
-//            OpponentJoined(Nickname),
-//            OpponentReady,
-//            OpponentLeft,
-//            OpponentMissed(Position),
-//            OpponentHit(Position),
-//            GameOver(Who),
-//        }
-//    }
-//}
