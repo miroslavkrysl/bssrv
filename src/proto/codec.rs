@@ -183,13 +183,13 @@ impl Payload {
         Some(serialized)
     }
 
-    /// Add a string item.
-    pub fn add_string(&mut self, string: String) {
+    /// Put a string item into the payload.
+    pub fn put_string(&mut self, string: String) {
         self.items.push_back(string);
     }
 
-    /// Add an int item, which is serialized into a string.
-    pub fn add_int(&mut self, int: i32) {
+    /// Put an int item, which is serialized into a string.
+    pub fn put_int(&mut self, int: i32) {
         self.items.push_back(int.to_string());
     }
 

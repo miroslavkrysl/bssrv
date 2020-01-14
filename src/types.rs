@@ -119,7 +119,7 @@ impl Display for SessionKey {
     }
 }
 
-// ---ShipId---
+// ---ShipKind---
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum ShipKind {
@@ -260,11 +260,11 @@ impl Display for Placement {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Layout {
-    placements: Vec<Placement>
+    placements: ShipsPlacements
 }
 
 impl Layout {
-    pub fn new(placements: Vec<Placement>) -> Result<Self, DomainError> {
+    pub fn new(placements: ShipsPlacements) -> Result<Self, DomainError> {
         if placements.len() != 5 {
             return Err(
                 DomainError::new(
@@ -275,23 +275,14 @@ impl Layout {
         Ok(Layout { placements })
     }
 
-    pub fn placements(&self) -> &Vec<Placement> {
+    pub fn placements(&self) -> &ShipsPlacements {
         &self.placements
     }
 }
 
 impl Display for Layout {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        let mut string = String::from("{");
-
-        string.push_str(
-            &self.placements.iter()
-                .map(|p| format!("{}", p))
-                .collect::<Vec<_>>().join(", "));
-
-        string.push_str("}");
-
-        write!(f, "{}", string)
+        write!(f, "{}", self.placements)
     }
 }
 
@@ -299,27 +290,31 @@ impl Display for Layout {
 // ---SunkShips---
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SunkShips {
-    ships: HashMap<ShipKind, Placement>
+pub struct ShipsPlacements {
+    placements: HashMap<ShipKind, Placement>
 }
 
-impl SunkShips {
+impl ShipsPlacements {
     pub fn new(ships: HashMap<ShipKind, Placement>) -> Self {
-        SunkShips { ships }
+        ShipsPlacements { placements: ships }
     }
 
-    pub fn ships(&self) -> &HashMap<ShipKind, Placement> {
-        &self.ships
+    pub fn placements(&self) -> &HashMap<ShipKind, Placement> {
+        &self.placements
+    }
+    
+    pub fn len(&self) -> usize {
+        self.placements.len()
     }
 }
 
-impl Display for SunkShips {
+impl Display for ShipsPlacements {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         let mut string = String::from("{");
 
         string.push_str(
-            &self.ships.iter()
-                .map(|(k, p)| format!("{} ({})", k, p))
+            &self.placements.iter()
+                .map(|(k, p)| format!("{} {}", k, p))
                 .collect::<Vec<_>>().join(", "));
 
         string.push_str("}");
@@ -372,8 +367,9 @@ pub enum RestoreState {
     Game {
         on_turn: Who,
         player_board: Hits,
+        layout: Layout,
         opponent_board: Hits,
-        sunk_ships: SunkShips
+        sunk_ships: ShipsPlacements
     }
 }
 
@@ -384,9 +380,10 @@ impl Display for RestoreState {
             RestoreState::Game {
                 on_turn,
                 player_board,
+                layout,
                 opponent_board,
                 sunk_ships
-            } => write!(f, "game ({}, {}, {}, {})", on_turn, player_board, opponent_board, sunk_ships)
+            } => write!(f, "game ({}, {}, {}, {}, {})", on_turn, player_board, layout, opponent_board, sunk_ships)
         }
     }
 }
