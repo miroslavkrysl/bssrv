@@ -43,12 +43,11 @@ pub fn split(string: &str, separator: char, escape: char) -> Vec<String> {
     tokens
 }
 
-/// Find position of the character that is not escape by the escape character in the string.
-pub fn find(string: &str, start: usize, to_find: char, escape: char) -> Option<usize> {
-    assert!(start <= string.len(), "start must be <= string.len().");
-
+/// Find position in the string of the first byte of the character
+/// which is not escaped by the escape character.
+pub fn find(string: &str, to_find: char, escape: char) -> Option<usize> {
     let mut is_escaped = false;
-    for (i, c) in string.chars().skip(start).enumerate() {
+    for (i, c) in string.char_indices() {
         if is_escaped {
             is_escaped = false;
 
@@ -224,7 +223,7 @@ mod tests {
     #[test]
     fn test_escape() {
         let escaped = escape(r"he;ll:o\j;:;el\\lo", &[';', ':'], '\\');
-        assert_eq!(escaped, r"he\;ll\:o\\j\;\:\;el\\lo");
+        assert_eq!(escaped, r"he\;ll\:o\j\;\:\;el\\lo");
     }
 
     #[test]

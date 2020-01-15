@@ -1,13 +1,14 @@
 //! Client messages deserialization logic
 
 use crate::types::{SessionKey, Nickname, Layout, Position, Placement, Orientation, DomainErrorKind, ShipsPlacements, ShipKind};
-use crate::proto::ClientMessage;
+use crate::proto::{ClientMessage, ServerMessage};
+use crate::proto::codec::{find, Payload, PAYLOAD_START, ESCAPE, MESSAGE_END, MAX_MESSAGE_LENGTH, unescape};
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use std::error::Error;
 use std::num::ParseIntError;
-use crate::proto::codec::{find, Payload, PAYLOAD_START, ESCAPE};
-use std::collections::HashMap;
+use std::collections::{HashMap, LinkedList};
+use log::{trace, error, info};
 
 // ---ERRORS---
 
@@ -17,6 +18,8 @@ pub enum DeserializeErrorKind {
     UnknownHeader,
     NoMorePayloadItems,
     InvalidEnumValue,
+    MessageLengthExceeded,
+    InvalidUtf8,
     IntError(ParseIntError),
     StructError(StructDeserializeError),
 }
@@ -27,6 +30,8 @@ impl Display for DeserializeErrorKind {
             DeserializeErrorKind::UnknownHeader => write!(f, "Unknown header."),
             DeserializeErrorKind::NoMorePayloadItems => write!(f, "Further payload item was expected, but not present."),
             DeserializeErrorKind::InvalidEnumValue => write!(f, "Invalid enum value."),
+            DeserializeErrorKind::MessageLengthExceeded => write!(f, "String segment is too long to be a valid message."),
+            DeserializeErrorKind::InvalidUtf8 => write!(f, "Invalid UTF-8 byte sequence."),
             DeserializeErrorKind::IntError(ref error) => write!(f, "Integer can't be properly deserialized: {}", error),
             DeserializeErrorKind::StructError(ref error) => write!(f, "{}", error),
         }
@@ -52,6 +57,12 @@ pub struct DeserializeError {
 impl Display for DeserializeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "Deserialization error: {}", self.kind)
+    }
+}
+
+impl From<DeserializeErrorKind> for DeserializeError {
+    fn from(kind: DeserializeErrorKind) -> Self {
+        DeserializeError::new(kind)
     }
 }
 
@@ -144,11 +155,120 @@ impl Error for StructDeserializeError {}
 
 // ---DESERIALIZATION---
 
+// ---Stream deserialize---
+
+pub struct Deserializer {
+    to_decode: Vec<u8>,
+    byte_buffer: Vec<u8>,
+    string_buffer: String,
+}
+
+impl Deserializer {
+    pub fn new() -> Self {
+        Deserializer {
+            to_decode: Vec::new(),
+            byte_buffer: Vec::new(),
+            string_buffer: String::new(),
+        }
+    }
+
+    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Vec<ClientMessage>, DeserializeError> {
+        info!("deserializing {} bytes", bytes.len());
+        let mut messages = Vec::new();
+
+        // decode bytes into utf8 string
+        self.to_decode.clear();
+
+        if !self.byte_buffer.is_empty() {
+            self.to_decode.extend(self.byte_buffer.drain(..));
+        }
+
+        self.to_decode.extend_from_slice(bytes);
+
+        match std::str::from_utf8(&mut self.to_decode) {
+            Ok(string) => {
+                trace!("all bytes decoded into string");
+
+                // all bytes decoded into utf8 string
+                self.string_buffer.push_str(&string);
+            },
+            Err(error) => {
+                // some bytes are invalid
+
+                if let Some(_) = error.error_len() {
+                    error!("invalid utf-8 sequence");
+                    // invalid utf8 sequence
+                    return Err(DeserializeErrorKind::InvalidUtf8.into());
+                }
+
+                // last utf8 character is not complete
+                trace!("last utf-8 char incomplete");
+
+                let (complete, incomplete) = self.to_decode.split_at(error.valid_up_to());
+
+                unsafe {
+                    // store complete sequence into string buffer
+                    self.string_buffer.push_str(std::str::from_utf8_unchecked(complete))
+                }
+
+                // store incomplete character into byte buffer
+                self.byte_buffer.extend_from_slice(incomplete);
+            },
+        }
+
+        // deserialize string into messages
+        let mut byte_offset = 0;
+
+        loop {
+            let separator_pos = find(&self.string_buffer[byte_offset..], MESSAGE_END, ESCAPE);
+
+            match separator_pos {
+                None => {
+                    // message is not complete yet
+                    trace!("message is not complete");
+
+                    if self.string_buffer[byte_offset..].len() > MAX_MESSAGE_LENGTH {
+                        error!("allowed message length exceeded");
+                        return Err(DeserializeErrorKind::MessageLengthExceeded.into());
+                    }
+
+                    break;
+                },
+                Some(separator_pos) => {
+                    trace!("a message end was found - deserializing");
+
+                    let message_str = &self.string_buffer[byte_offset..separator_pos];
+
+                    byte_offset = separator_pos + MESSAGE_END.len_utf8();
+
+                    // unescape message end char
+                    let message_string = unescape(message_str, &[MESSAGE_END], ESCAPE);
+
+                    // build message
+                    let message = ClientMessage::deserialize(&message_string)?;
+                    messages.push(message);
+                },
+            }
+        }
+
+        if byte_offset > 0 {
+            // move undeserialized string to the string beginning
+            self.string_buffer.drain(..byte_offset);
+        }
+
+        info!("{} messages was found", messages.len());
+
+        Ok(messages)
+    }
+}
+
+// ---Message deserialize---
+
 impl ClientMessage {
     /// Deserialize message from a string.
     pub fn deserialize(serialized: &str) -> Result<Self, DeserializeError> {
         // deserialize header
-        let payload_start = find(serialized, 0, PAYLOAD_START, ESCAPE);
+        let payload_start = find(serialized, PAYLOAD_START, ESCAPE);
 
         let header;
         let mut payload;
