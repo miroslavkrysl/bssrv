@@ -8,7 +8,8 @@ use std::collections::VecDeque;
 // ---Stream serialize---
 
 /// Message serializer which serializes ServerMessages
-/// into a stream of bytes.
+/// into a stream of bytes into the internal buffer which
+/// can be read and be cleared.
 pub struct Serializer {
     byte_buffer: Vec<u8>
 }

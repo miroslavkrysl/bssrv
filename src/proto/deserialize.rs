@@ -14,7 +14,8 @@ use log::{trace, error, info, debug, warn};
 // ---Stream deserialize---
 
 /// Message deserializer which deserializes ClientMessages
-/// from the stream of bytes.
+/// from the stream of bytes. Deserialized messages can be later
+/// taken from the internal buffer all at once.
 ///
 /// There must be only one Deserializer per stream, because
 /// the deserializer remembers previously not yet deserialized parts
@@ -112,7 +113,7 @@ impl Deserializer {
     }
 
     /// Get all available deserialized messages.
-    pub fn take(&mut self) -> Vec<ClientMessage> {
+    pub fn take_messages(&mut self) -> Vec<ClientMessage> {
         self.message_buffer.drain(..).collect()
     }
 }
