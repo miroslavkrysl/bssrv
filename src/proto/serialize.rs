@@ -3,30 +3,46 @@ use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload, escape, MESSAGE_END, 
 use crate::types::{Nickname, SessionKey, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
 use std::convert::TryInto;
 use log::{info, trace, debug};
+use std::collections::VecDeque;
 
 // ---Stream serialize---
 
 /// Message serializer which serializes ServerMessages
 /// into a stream of bytes.
-pub struct Serializer {}
+pub struct Serializer {
+    byte_buffer: VecDeque<u8>
+}
 
 impl Serializer {
     /// Create a new Serializer.
     pub fn new() -> Self {
-        Serializer {}
+        Serializer {
+            byte_buffer: VecDeque::new()
+        }
     }
 
     /// Serialize message into the stream of bytes.
-    pub fn serialize(&self, message: &ServerMessage) -> Vec<u8> {
-        debug!("serializing a message");
-
+    pub fn serialize(&mut self, message: &ServerMessage) {
         let mut message_string = message.serialize();
 
         // escape message end char
         message_string = escape(&message_string, &[MESSAGE_END], ESCAPE);
         message_string.push(MESSAGE_END);
 
-        message_string.into_bytes()
+        self.byte_buffer.extend(message_string.bytes())
+    }
+
+    /// Check if a serialized bytes are available in the internal bytes buffer.
+    fn has_bytes(&self) -> bool {
+        !self.byte_buffer.is_empty()
+    }
+
+    /// Take at most `count` available serialized bytes.
+    fn take(&mut self, mut count: usize) -> Vec<u8> {
+        if count > self.byte_buffer.len() {
+            count = self.byte_buffer.len()
+        }
+        self.byte_buffer.drain(..count).collect()
     }
 }
 

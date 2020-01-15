@@ -10,150 +10,6 @@ use std::num::ParseIntError;
 use std::collections::{HashMap, LinkedList};
 use log::{trace, error, info, debug, warn};
 
-// ---ERRORS---
-
-/// Describes the kind of the deserialization error.
-#[derive(Debug, Eq, PartialEq)]
-pub enum DeserializationErrorKind {
-    UnknownHeader,
-    NoMorePayloadItems,
-    InvalidEnumValue,
-    MessageLengthExceeded,
-    InvalidUtf8,
-    IntError(ParseIntError),
-    StructError(StructDeserializeError),
-}
-
-impl Display for DeserializationErrorKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        match self {
-            DeserializationErrorKind::UnknownHeader => write!(f, "Unknown header."),
-            DeserializationErrorKind::NoMorePayloadItems => write!(f, "Further payload item was expected, but not present."),
-            DeserializationErrorKind::InvalidEnumValue => write!(f, "Invalid enum value."),
-            DeserializationErrorKind::MessageLengthExceeded => write!(f, "String segment is too long to be a valid message."),
-            DeserializationErrorKind::InvalidUtf8 => write!(f, "Invalid UTF-8 byte sequence."),
-            DeserializationErrorKind::IntError(ref error) => write!(f, "Integer can't be properly deserialized: {}", error),
-            DeserializationErrorKind::StructError(ref error) => write!(f, "{}", error),
-        }
-    }
-}
-
-/// An error indicating that a value is out of its domain.
-#[derive(Debug, Eq, PartialEq)]
-pub struct DeserializationError {
-    /// Kind of deserialization error.
-    kind: DeserializationErrorKind
-}
-
-impl DeserializationError {
-    /// Create new deserialization error of given kind.
-    pub fn new(kind: DeserializationErrorKind) -> Self {
-        DeserializationError {
-            kind
-        }
-    }
-}
-
-impl Display for DeserializationError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "Deserialization error: {}", self.kind)
-    }
-}
-
-impl From<DeserializationErrorKind> for DeserializationError {
-    fn from(kind: DeserializationErrorKind) -> Self {
-        DeserializationError::new(kind)
-    }
-}
-
-impl From<ParseIntError> for DeserializationError {
-    fn from(error: ParseIntError) -> Self {
-        DeserializationError::new(DeserializationErrorKind::IntError(error))
-    }
-}
-
-impl From<StructDeserializeError> for DeserializationError {
-    fn from(error: StructDeserializeError) -> Self {
-        DeserializationError::new(DeserializationErrorKind::StructError(error))
-    }
-}
-
-impl Error for DeserializationError {}
-
-/// Describes the kind of the struct deserialization error.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum StructDeserializeErrorKind {
-    SessionKey,
-    Nickname,
-    ShipKind,
-    Position,
-    Orientation,
-    Placement,
-    Layout,
-    ShipsPlacements,
-}
-
-impl Display for StructDeserializeErrorKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        match self {
-            StructDeserializeErrorKind::SessionKey =>
-                write!(f, "SessionKey can't be properly deserialized"),
-            StructDeserializeErrorKind::Nickname =>
-                write!(f, "Nickname can't be properly deserialized"),
-            StructDeserializeErrorKind::ShipKind =>
-                write!(f, "ShipId can't be properly deserialized"),
-            StructDeserializeErrorKind::Position =>
-                write!(f, "Position can't be properly deserialized"),
-            StructDeserializeErrorKind::Orientation =>
-                write!(f, "Orientation can't be properly deserialized"),
-            StructDeserializeErrorKind::Placement =>
-                write!(f, "Placement can't be properly deserialized"),
-            StructDeserializeErrorKind::ShipsPlacements =>
-                write!(f, "ShipsPlacements can't be properly deserialized"),
-            StructDeserializeErrorKind::Layout =>
-                write!(f, "Layout can't be properly deserialized"),
-        }
-    }
-}
-
-/// An error indicating that a value is out of its domain.
-#[derive(Debug)]
-pub struct StructDeserializeError {
-    /// Kind of deserialization error.
-    kind: StructDeserializeErrorKind,
-
-    /// Cause of the error.
-    error: Box<dyn Error>
-}
-
-impl StructDeserializeError {
-    /// Create new struct deserialization error of given kind and cause.
-    fn new(kind: StructDeserializeErrorKind, cause: Box<dyn Error>) -> Self {
-        StructDeserializeError {
-            kind,
-            error: cause
-        }
-    }
-}
-
-impl PartialEq for StructDeserializeError {
-    fn eq(&self, other: &Self) -> bool {
-        self.kind == other.kind
-    }
-}
-
-impl Eq for StructDeserializeError {}
-
-impl Display for StructDeserializeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}: {}", self.kind, self.error)
-    }
-}
-
-impl Error for StructDeserializeError {}
-
-
-// ---DESERIALIZATION---
 
 // ---Stream deserialize---
 
@@ -166,6 +22,7 @@ impl Error for StructDeserializeError {}
 pub struct Deserializer {
     byte_buffer: Vec<u8>,
     string_buffer: String,
+    message_buffer: Vec<ClientMessage>,
 }
 
 impl Deserializer {
@@ -174,12 +31,13 @@ impl Deserializer {
         Deserializer {
             byte_buffer: Vec::new(),
             string_buffer: String::new(),
+            message_buffer: Vec::new(),
         }
     }
 
     /// Deserialize all available messages from the stream of bytes.
     /// If there is no message yet to be deserialized, the returned vector is empty.
-    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Vec<ClientMessage>, DeserializationError> {
+    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<(), DeserializationError> {
 
         // add new bytes to undecoded bytes from previous call
         self.byte_buffer.extend_from_slice(bytes);
@@ -215,8 +73,6 @@ impl Deserializer {
         // deserialize decoded string into messages
 
         // storage for deserialized messages
-        let mut messages = Vec::new();
-
         let mut byte_offset = 0;
 
         loop {
@@ -231,7 +87,7 @@ impl Deserializer {
                         return Err(DeserializationErrorKind::MessageLengthExceeded.into());
                     }
 
-                    break;
+                    break Ok(())
                 },
                 Some(separator_pos) => {
                     // a message end was found
@@ -244,12 +100,20 @@ impl Deserializer {
 
                     // build message
                     let message = ClientMessage::deserialize(&message_string)?;
-                    messages.push(message);
+                    self.message_buffer.push(message);
                 },
             }
         }
+    }
 
-        Ok(messages)
+    /// Check if a deserialized message is available in the internal message buffer.
+    fn has_message(&self) -> bool {
+        !self.message_buffer.is_empty()
+    }
+
+    /// Get all available deserialized messages.
+    fn take(&mut self) -> Vec<ClientMessage> {
+        self.message_buffer.drain(..).collect()
     }
 }
 
@@ -495,3 +359,148 @@ impl DeserializeFromPayload for ShipKind {
         }
     }
 }
+
+
+
+
+// ---ERRORS---
+
+/// Describes the kind of the deserialization error.
+#[derive(Debug, Eq, PartialEq)]
+pub enum DeserializationErrorKind {
+    UnknownHeader,
+    NoMorePayloadItems,
+    InvalidEnumValue,
+    MessageLengthExceeded,
+    InvalidUtf8,
+    IntError(ParseIntError),
+    StructError(StructDeserializeError),
+}
+
+impl Display for DeserializationErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            DeserializationErrorKind::UnknownHeader => write!(f, "Unknown header."),
+            DeserializationErrorKind::NoMorePayloadItems => write!(f, "Further payload item was expected, but not present."),
+            DeserializationErrorKind::InvalidEnumValue => write!(f, "Invalid enum value."),
+            DeserializationErrorKind::MessageLengthExceeded => write!(f, "String segment is too long to be a valid message."),
+            DeserializationErrorKind::InvalidUtf8 => write!(f, "Invalid UTF-8 byte sequence."),
+            DeserializationErrorKind::IntError(ref error) => write!(f, "Integer can't be properly deserialized: {}", error),
+            DeserializationErrorKind::StructError(ref error) => write!(f, "{}", error),
+        }
+    }
+}
+
+/// An error indicating that a value is out of its domain.
+#[derive(Debug, Eq, PartialEq)]
+pub struct DeserializationError {
+    /// Kind of deserialization error.
+    kind: DeserializationErrorKind
+}
+
+impl DeserializationError {
+    /// Create new deserialization error of given kind.
+    pub fn new(kind: DeserializationErrorKind) -> Self {
+        DeserializationError {
+            kind
+        }
+    }
+}
+
+impl Display for DeserializationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "Deserialization error: {}", self.kind)
+    }
+}
+
+impl From<DeserializationErrorKind> for DeserializationError {
+    fn from(kind: DeserializationErrorKind) -> Self {
+        DeserializationError::new(kind)
+    }
+}
+
+impl From<ParseIntError> for DeserializationError {
+    fn from(error: ParseIntError) -> Self {
+        DeserializationError::new(DeserializationErrorKind::IntError(error))
+    }
+}
+
+impl From<StructDeserializeError> for DeserializationError {
+    fn from(error: StructDeserializeError) -> Self {
+        DeserializationError::new(DeserializationErrorKind::StructError(error))
+    }
+}
+
+impl Error for DeserializationError {}
+
+/// Describes the kind of the struct deserialization error.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum StructDeserializeErrorKind {
+    SessionKey,
+    Nickname,
+    ShipKind,
+    Position,
+    Orientation,
+    Placement,
+    Layout,
+    ShipsPlacements,
+}
+
+impl Display for StructDeserializeErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            StructDeserializeErrorKind::SessionKey =>
+                write!(f, "SessionKey can't be properly deserialized"),
+            StructDeserializeErrorKind::Nickname =>
+                write!(f, "Nickname can't be properly deserialized"),
+            StructDeserializeErrorKind::ShipKind =>
+                write!(f, "ShipId can't be properly deserialized"),
+            StructDeserializeErrorKind::Position =>
+                write!(f, "Position can't be properly deserialized"),
+            StructDeserializeErrorKind::Orientation =>
+                write!(f, "Orientation can't be properly deserialized"),
+            StructDeserializeErrorKind::Placement =>
+                write!(f, "Placement can't be properly deserialized"),
+            StructDeserializeErrorKind::ShipsPlacements =>
+                write!(f, "ShipsPlacements can't be properly deserialized"),
+            StructDeserializeErrorKind::Layout =>
+                write!(f, "Layout can't be properly deserialized"),
+        }
+    }
+}
+
+/// An error indicating that a value is out of its domain.
+#[derive(Debug)]
+pub struct StructDeserializeError {
+    /// Kind of deserialization error.
+    kind: StructDeserializeErrorKind,
+
+    /// Cause of the error.
+    error: Box<dyn Error>
+}
+
+impl StructDeserializeError {
+    /// Create new struct deserialization error of given kind and cause.
+    fn new(kind: StructDeserializeErrorKind, cause: Box<dyn Error>) -> Self {
+        StructDeserializeError {
+            kind,
+            error: cause
+        }
+    }
+}
+
+impl PartialEq for StructDeserializeError {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+}
+
+impl Eq for StructDeserializeError {}
+
+impl Display for StructDeserializeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}: {}", self.kind, self.error)
+    }
+}
+
+impl Error for StructDeserializeError {}
