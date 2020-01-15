@@ -10,14 +10,14 @@ use std::collections::VecDeque;
 /// Message serializer which serializes ServerMessages
 /// into a stream of bytes.
 pub struct Serializer {
-    byte_buffer: VecDeque<u8>
+    byte_buffer: Vec<u8>
 }
 
 impl Serializer {
     /// Create a new Serializer.
     pub fn new() -> Self {
         Serializer {
-            byte_buffer: VecDeque::new()
+            byte_buffer: Vec::new()
         }
     }
 
@@ -37,12 +37,18 @@ impl Serializer {
         !self.byte_buffer.is_empty()
     }
 
-    /// Take at most `count` available serialized bytes.
-    pub fn take(&mut self, mut count: usize) -> Vec<u8> {
+    /// Get all available serialized bytes.
+    pub fn bytes(&self) -> &[u8] {
+        &self.byte_buffer
+    }
+
+    /// Discard first `count` bytes from the internal buffer.
+    pub fn clear(&mut self, mut count: usize) {
         if count > self.byte_buffer.len() {
             count = self.byte_buffer.len()
         }
-        self.byte_buffer.drain(..count).collect()
+
+        self.byte_buffer.drain(..count);
     }
 }
 
