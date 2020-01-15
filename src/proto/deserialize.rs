@@ -38,6 +38,13 @@ impl Display for DeserializeErrorKind {
     }
 }
 
+/// An error indicating that a value is out of its domain.
+#[derive(Debug, Eq, PartialEq)]
+pub struct DeserializeError {
+    /// Kind of deserialization error.
+    kind: DeserializeErrorKind
+}
+
 impl DeserializeError {
     /// Create new deserialization error of given kind.
     pub fn new(kind: DeserializeErrorKind) -> Self {
@@ -45,13 +52,6 @@ impl DeserializeError {
             kind
         }
     }
-}
-
-/// An error indicating that a value is out of its domain.
-#[derive(Debug, Eq, PartialEq)]
-pub struct DeserializeError {
-    /// Kind of deserialization error.
-    kind: DeserializeErrorKind
 }
 
 impl Display for DeserializeError {
