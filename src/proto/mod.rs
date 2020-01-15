@@ -10,3 +10,4 @@ pub use message::ClientMessage;
 pub use message::ServerMessage;
 
 pub use deserialize::Deserializer;
+pub use serialize::Serializer;
