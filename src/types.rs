@@ -53,11 +53,12 @@ pub struct Nickname {
 
 impl Nickname {
     pub fn new(nickname: String) -> Result<Self, DomainError> {
-        if nickname.len() < 3 || nickname.len() > 32 {
+        let len = nickname.chars().count();
+        if len < 3 || len > 32 {
             return Err(
                 DomainError::new(
                     DomainErrorKind::InvalidLength,
-                    format!("Nickname must have 3 - 16 characters, but has {}.", nickname.len())));
+                    format!("Nickname must have 3 - 16 characters, but has {}.", len)));
         }
 
         if !nickname.chars().all(|c| c.is_alphanumeric()) {
@@ -91,11 +92,12 @@ pub struct SessionKey {
 
 impl SessionKey {
     pub fn new(session_key: String) -> Result<Self, DomainError> {
-        if session_key.len() != 32 {
+        let len = session_key.chars().count();
+        if len != 32 {
             return Err(
                 DomainError::new(
                     DomainErrorKind::InvalidLength,
-                    format!("SessionKey must have 3 - 32 characters, but has {}.", session_key.len())));
+                    format!("SessionKey must have 3 - 32 characters, but has {}.", len)));
         }
 
         if !session_key.chars().all(|c| c.is_alphanumeric()) {
