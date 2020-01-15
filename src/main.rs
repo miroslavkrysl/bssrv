@@ -1,31 +1,47 @@
-use bssrv::proto::{ClientMessage, ServerMessage};
+use bssrv::proto::{ClientMessage, ServerMessage, Deserializer};
 use bssrv::types::{Position, RestoreState, Who, Hits};
+use std::net::{SocketAddr, IpAddr, Ipv4Addr};
+use std::time::Duration;
+use log::{Level, LevelFilter};
+use simplelog::{Config, SimpleLogger, ConfigBuilder, TermLogger, TerminalMode};
+use bssrv::net::{ServerManager, Server};
+//
+//struct Ser {
+//}
+//
+//struct Des {
+//}
+//
+//impl Serializer<ServerMessage> for Ser {
+//    fn new() -> Self {
+//        unimplemented!()
+//    }
+//
+//    fn serialize(message: ServerMessage) -> Vec<u8> {
+//        unimplemented!()
+//    }
+//}
+//
+//impl Deserializer<ClientMessage> for Des {
+//    fn new() -> Self {
+//        unimplemented!()
+//    }
+//
+//    fn deserialize(serialized: &str) -> Option<Vec<ClientMessage>> {
+//        unimplemented!()
+//    }
+//}
 
 fn main() {
-    let string_g = "layout:5;AC;0;1;west;PB;2;3;south;C;4;5;north;D;6;7;east;B;8;9;north";
+    TermLogger::init(LevelFilter::Trace, Config::default(), TerminalMode::Stderr).unwrap();
+    let man = ServerManager::new();
 
-    let result = ClientMessage::deserialize(string_g);
+    let mut server: Server = Server::new(
+        &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20000),
+        Duration::from_secs(1),
+        man
+    ).unwrap();
 
-    match result {
-        Ok(ok) => {
-            if let ClientMessage::Layout(layout) = ok.clone() {
-                let l = layout.clone();
+    server.run().unwrap();
 
-                println!("{}", ServerMessage::RestoreSessionOk(RestoreState::Game {
-                    on_turn: Who::You,
-                    player_board: Hits::new(Vec::new()),
-                    layout,
-                    opponent_board: Hits::new(Vec::new()),
-                    sunk_ships: l.placements().clone()
-                }).serialize())
-            }
-            println!("{}", ok);
-        },
-        Err(err) => println!("{}", err),
-    }
-
-
-    let message = ServerMessage::OpponentHit(Position::new(2, 4).unwrap());
-
-    println!("{}", message.serialize());
 }

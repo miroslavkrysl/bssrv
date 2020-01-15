@@ -179,11 +179,10 @@ impl Deserializer {
         }
     }
 
-    /// Deserialize all available messages from the stream of bytes.
+    /// Deserialize next available message from the stream of bytes.
     /// If there is no message yet to be deserialized, the returned vector is empty.
-    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Vec<ClientMessage>, DeserializeError> {
+    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Option<ClientMessage>, DeserializeError> {
         debug!("deserializing {} bytes", bytes.len());
-        let mut messages = Vec::new();
 
         // decode bytes into utf8 string
         self.to_decode.clear();
@@ -225,49 +224,37 @@ impl Deserializer {
             },
         }
 
-        // deserialize string into messages
-        let mut byte_offset = 0;
+        // deserialize next message from the string segment
+        let separator_pos = find(&self.string_buffer, MESSAGE_END, ESCAPE);
 
-        loop {
-            let separator_pos = find(&self.string_buffer[byte_offset..], MESSAGE_END, ESCAPE);
+        match separator_pos {
+            None => {
+                // message is not complete yet
+                trace!("message is not complete");
 
-            match separator_pos {
-                None => {
-                    // message is not complete yet
-                    trace!("message is not complete");
+                if self.string_buffer.chars().count() > MAX_MESSAGE_LENGTH {
+                    warn!("allowed message length exceeded");
+                    Err(DeserializeErrorKind::MessageLengthExceeded.into())
+                } else {
+                    Ok(None)
+                }
+            },
+            Some(separator_pos) => {
+                trace!("a message end was found - deserializing");
 
-                    if self.string_buffer[byte_offset..].len() > MAX_MESSAGE_LENGTH {
-                        warn!("allowed message length exceeded");
-                        return Err(DeserializeErrorKind::MessageLengthExceeded.into());
-                    }
+                let message_str = &self.string_buffer[..separator_pos];
 
-                    break;
-                },
-                Some(separator_pos) => {
-                    trace!("a message end was found - deserializing");
+                // unescape message end char
+                let message_string = unescape(message_str, &[MESSAGE_END], ESCAPE);
 
-                    let message_str = &self.string_buffer[byte_offset..separator_pos];
+                // build message
+                let message = ClientMessage::deserialize(&message_string)?;
 
-                    byte_offset = separator_pos + MESSAGE_END.len_utf8();
+                self.string_buffer.drain(..(separator_pos + MESSAGE_END.len_utf8()));
 
-                    // unescape message end char
-                    let message_string = unescape(message_str, &[MESSAGE_END], ESCAPE);
-
-                    // build message
-                    let message = ClientMessage::deserialize(&message_string)?;
-                    messages.push(message);
-                },
-            }
+                Ok(Some(message))
+            },
         }
-
-        if byte_offset > 0 {
-            // move undeserialized string to the string beginning
-            self.string_buffer.drain(..byte_offset);
-        }
-
-        info!("{} messages was found", messages.len());
-
-        Ok(messages)
     }
 }
 
