@@ -6,6 +6,7 @@ use std::time::Duration;
 use std::collections::HashSet;
 
 /// An event which can happen on a listener or a peer.
+#[derive(Debug)]
 pub enum PollEvent {
     /// A new peer can be accepted on listener with the particular id.
     Accept(usize),
@@ -41,18 +42,18 @@ impl Poller {
         if self.listeners.contains(&id) || self.peers.contains(&id) {
             panic!("A poller instance has already registered id {}", id);
         }
-        
+
         listener.register(&self.poll, Token(id))?;
         self.listeners.insert(id);
         Ok(())
     }
 
     /// Deregister a listener from polling.
-    pub fn deregister_listener(&mut self, listener: &Listener, id: usize) -> io::Result<()> {
-        if !self.listeners.remove(&id) {
+    pub fn deregister_listener(&mut self, listener: &Listener, id: &usize) -> io::Result<()> {
+        if !self.listeners.remove(id) {
             panic!("listener with id {} is not present in this poller instance", id);
         }
-        
+
         listener.deregister(&self.poll)?;
         Ok(())
     }
@@ -62,28 +63,28 @@ impl Poller {
         if self.listeners.contains(&id) || self.peers.contains(&id) {
             panic!("A poller instance has already registered id {}", id);
         }
-        
+
         peer.register(&self.poll, Token(id))?;
         self.peers.insert(id);
         Ok(())
     }
 
     /// Reregister a peer for polling.
-    pub fn reregister_peer(&self, peer: &Peer, id: usize) -> io::Result<()> {
-        if self.listeners.contains(&id) || self.peers.contains(&id) {
-            panic!("A poller instance has already registered id {}", id);
+    pub fn reregister_peer(&self, peer: &Peer, id: &usize) -> io::Result<()> {
+        if !self.listeners.contains(id) && !self.peers.contains(id) {
+            panic!("A poller instance has not registered id {} yet", id);
         }
-        
-        peer.reregister(&self.poll, Token(id))?;
+
+        peer.reregister(&self.poll, Token::from(*id))?;
         Ok(())
     }
 
     /// Deregister a peer from polling.
-    pub fn deregister_peer(&mut self, peer: &Peer, id: usize) -> io::Result<()> {
-        if !self.peers.remove(&id) {
+    pub fn deregister_peer(&mut self, peer: &Peer, id: &usize) -> io::Result<()> {
+        if !self.peers.remove(id) {
             panic!("listener with id {} is not present in this poller instance", id);
         }
-        
+
         peer.deregister(&self.poll)?;
         Ok(())
     }

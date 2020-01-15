@@ -49,6 +49,7 @@ impl Deserializer {
                 // all bytes decoded into utf8 string
 
                 self.string_buffer.push_str(&string);
+                self.byte_buffer.clear();
             },
             Err(error) => {
                 // some characters are invalid or incomplete
@@ -88,7 +89,7 @@ impl Deserializer {
                         return Err(DeserializationErrorKind::MessageLengthExceeded.into());
                     }
 
-                    break Ok(())
+                    break;
                 },
                 Some(separator_pos) => {
                     // a message end was found
@@ -105,6 +106,10 @@ impl Deserializer {
                 },
             }
         }
+
+        self.string_buffer.drain(..byte_offset);
+
+        Ok(())
     }
 
     /// Check if a deserialized message is available in the internal message buffer.

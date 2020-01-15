@@ -40,8 +40,16 @@ impl Server {
         self.peers.remove(id)
     }
 
+    pub fn listener(&self) -> &Listener {
+        &self.listener
+    }
+
     pub fn listener_mut(&mut self) -> &mut Listener {
         &mut self.listener
+    }
+
+    pub fn peer(&self, id: &usize) -> Option<&Peer> {
+        self.peers.get(id)
     }
 
     pub fn peer_mut(&mut self, id: &usize) -> Option<&mut Peer> {

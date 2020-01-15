@@ -97,7 +97,7 @@ impl SessionKey {
             return Err(
                 DomainError::new(
                     DomainErrorKind::InvalidLength,
-                    format!("SessionKey must have 3 - 32 characters, but has {}.", len)));
+                    format!("SessionKey must have 32 characters, but has {}.", len)));
         }
 
         if !session_key.chars().all(|c| c.is_alphanumeric()) {

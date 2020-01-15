@@ -48,10 +48,10 @@ impl Peer {
             ready = ready | Ready::writable();
         }
 
-        poll.register(
+        poll.reregister(
             &self.stream,
             token,
-            Ready::readable(),
+            ready,
             PollOpt::edge())
     }
 
@@ -142,8 +142,8 @@ impl Peer {
     }
 
     /// Close the peers stream.
-    fn close(&self) {
-        self.stream.shutdown(Shutdown::Both).expect("An error occurred while closing the stream.");
+    pub fn close(&self) {
+        let _ = self.stream.shutdown(Shutdown::Both);
     }
 }
 
