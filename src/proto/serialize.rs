@@ -1,7 +1,37 @@
 use crate::proto::ServerMessage;
-use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload};
+use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload, escape, MESSAGE_END, ESCAPE};
 use crate::types::{Nickname, SessionKey, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
 use std::convert::TryInto;
+use log::{info, trace};
+
+// ---Stream serialize---
+
+/// Message serializer which serializes ServerMessages
+/// into a stream of bytes.
+pub struct Serializer {}
+
+impl Serializer {
+    /// Create a new Serializer.
+    pub fn new() -> Self {
+        Serializer {}
+    }
+
+    /// Serialize message into the stream of bytes.
+    pub fn serialize(&self, message: &ServerMessage) -> Vec<u8> {
+        info!("serializing a message");
+
+        let mut message_string = message.serialize();
+
+        // escape message end char
+        message_string = escape(&message_string, &[MESSAGE_END], ESCAPE);
+        message_string.push(MESSAGE_END);
+
+        message_string.into_bytes()
+    }
+}
+
+
+// ---Message serialize---
 
 impl ServerMessage {
     /// Serialize the message into a string.

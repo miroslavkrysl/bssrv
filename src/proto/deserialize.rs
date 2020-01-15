@@ -157,6 +157,12 @@ impl Error for StructDeserializeError {}
 
 // ---Stream deserialize---
 
+/// Message deserializer which deserializes ClientMessages
+/// from the stream of bytes.
+///
+/// There must be only one Deserializer per stream, because
+/// the deserializer remembers previously not yet deserialized parts
+/// of the stream.
 pub struct Deserializer {
     to_decode: Vec<u8>,
     byte_buffer: Vec<u8>,
@@ -164,6 +170,7 @@ pub struct Deserializer {
 }
 
 impl Deserializer {
+    /// Create a new deserializer
     pub fn new() -> Self {
         Deserializer {
             to_decode: Vec::new(),
@@ -172,6 +179,8 @@ impl Deserializer {
         }
     }
 
+    /// Deserialize all available messages from the stream of bytes.
+    /// If there is no message yet to be deserialized, the returned vector is empty.
     pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Vec<ClientMessage>, DeserializeError> {
         info!("deserializing {} bytes", bytes.len());
         let mut messages = Vec::new();
