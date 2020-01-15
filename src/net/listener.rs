@@ -19,7 +19,7 @@ impl Listener {
     }
 
     /// Register the listener for polling.
-    pub fn register(&self, poll: &Poll, token: Token) -> Result<(), io::Error> {
+    pub fn register(&self, poll: &Poll, token: Token) -> io::Result<()> {
         poll.register(
             &self.listener,
             token,
@@ -28,12 +28,12 @@ impl Listener {
     }
 
     /// Deregister the listener from polling.
-    pub fn deregister(&self, poll: &Poll) -> Result<(), io::Error> {
+    pub fn deregister(&self, poll: &Poll) -> io::Result<()> {
         poll.deregister(&self.listener)
     }
 
     /// Accepts a new waiting peer.
-    pub fn accept_peer(&mut self) -> Result<Peer, io::Error> {
+    pub fn accept_peer(&mut self) -> io::Result<Peer> {
         let (mut stream, address) = self.listener.accept()?;
         Ok(Peer::new(stream, address))
     }
