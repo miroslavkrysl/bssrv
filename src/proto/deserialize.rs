@@ -107,12 +107,12 @@ impl Deserializer {
     }
 
     /// Check if a deserialized message is available in the internal message buffer.
-    fn has_message(&self) -> bool {
+    pub fn has_message(&self) -> bool {
         !self.message_buffer.is_empty()
     }
 
     /// Get all available deserialized messages.
-    fn take(&mut self) -> Vec<ClientMessage> {
+    pub fn take(&mut self) -> Vec<ClientMessage> {
         self.message_buffer.drain(..).collect()
     }
 }

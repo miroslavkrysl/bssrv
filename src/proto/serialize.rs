@@ -33,12 +33,12 @@ impl Serializer {
     }
 
     /// Check if a serialized bytes are available in the internal bytes buffer.
-    fn has_bytes(&self) -> bool {
+    pub fn has_bytes(&self) -> bool {
         !self.byte_buffer.is_empty()
     }
 
     /// Take at most `count` available serialized bytes.
-    fn take(&mut self, mut count: usize) -> Vec<u8> {
+    pub fn take(&mut self, mut count: usize) -> Vec<u8> {
         if count > self.byte_buffer.len() {
             count = self.byte_buffer.len()
         }
