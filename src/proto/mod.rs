@@ -9,8 +9,8 @@ mod serialize;
 pub use message::ClientMessage;
 pub use message::ServerMessage;
 
-pub use deserialize::DeserializeError;
-pub use deserialize::DeserializeErrorKind;
+pub use deserialize::DeserializationError;
+pub use deserialize::DeserializationErrorKind;
 pub use deserialize::StructDeserializeError;
 pub use deserialize::StructDeserializeErrorKind;
 

@@ -1,6 +1,6 @@
 use std::iter::Iterator;
 use std::collections::LinkedList;
-use crate::proto::deserialize::{DeserializeError, DeserializeErrorKind};
+use crate::proto::deserialize::{DeserializationError, DeserializationErrorKind};
 
 /// A character denoting message end.
 pub const MESSAGE_END: char = '\n';
@@ -193,22 +193,22 @@ impl Payload {
     }
 
     /// Take next item from the front of the payload.
-    fn take_item(&mut self) -> Result<String, DeserializeError> {
+    fn take_item(&mut self) -> Result<String, DeserializationError> {
         if let Some(item) = self.items.pop_front() {
             Ok(item)
         } else {
-            Err(DeserializeError::new(DeserializeErrorKind::NoMorePayloadItems))
+            Err(DeserializationError::new(DeserializationErrorKind::NoMorePayloadItems))
         }
     }
 
     /// Get a next string item.
-    pub fn take_string(&mut self) -> Result<String, DeserializeError> {
+    pub fn take_string(&mut self) -> Result<String, DeserializationError> {
         self.take_item()
     }
 
     /// Get an u8 integer item, which is deserialized from string.
     /// The item is taken from the payload even if the deserialization fails.
-    pub fn take_u8(&mut self) -> Result<u8, DeserializeError> {
+    pub fn take_u8(&mut self) -> Result<u8, DeserializationError> {
         let item = self.take_item()?;
         let int = item.parse()?;
         Ok(int)

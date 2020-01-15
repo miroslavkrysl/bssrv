@@ -14,7 +14,7 @@ use log::{trace, error, info, debug, warn};
 
 /// Describes the kind of the deserialization error.
 #[derive(Debug, Eq, PartialEq)]
-pub enum DeserializeErrorKind {
+pub enum DeserializationErrorKind {
     UnknownHeader,
     NoMorePayloadItems,
     InvalidEnumValue,
@@ -24,61 +24,61 @@ pub enum DeserializeErrorKind {
     StructError(StructDeserializeError),
 }
 
-impl Display for DeserializeErrorKind {
+impl Display for DeserializationErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            DeserializeErrorKind::UnknownHeader => write!(f, "Unknown header."),
-            DeserializeErrorKind::NoMorePayloadItems => write!(f, "Further payload item was expected, but not present."),
-            DeserializeErrorKind::InvalidEnumValue => write!(f, "Invalid enum value."),
-            DeserializeErrorKind::MessageLengthExceeded => write!(f, "String segment is too long to be a valid message."),
-            DeserializeErrorKind::InvalidUtf8 => write!(f, "Invalid UTF-8 byte sequence."),
-            DeserializeErrorKind::IntError(ref error) => write!(f, "Integer can't be properly deserialized: {}", error),
-            DeserializeErrorKind::StructError(ref error) => write!(f, "{}", error),
+            DeserializationErrorKind::UnknownHeader => write!(f, "Unknown header."),
+            DeserializationErrorKind::NoMorePayloadItems => write!(f, "Further payload item was expected, but not present."),
+            DeserializationErrorKind::InvalidEnumValue => write!(f, "Invalid enum value."),
+            DeserializationErrorKind::MessageLengthExceeded => write!(f, "String segment is too long to be a valid message."),
+            DeserializationErrorKind::InvalidUtf8 => write!(f, "Invalid UTF-8 byte sequence."),
+            DeserializationErrorKind::IntError(ref error) => write!(f, "Integer can't be properly deserialized: {}", error),
+            DeserializationErrorKind::StructError(ref error) => write!(f, "{}", error),
         }
     }
 }
 
 /// An error indicating that a value is out of its domain.
 #[derive(Debug, Eq, PartialEq)]
-pub struct DeserializeError {
+pub struct DeserializationError {
     /// Kind of deserialization error.
-    kind: DeserializeErrorKind
+    kind: DeserializationErrorKind
 }
 
-impl DeserializeError {
+impl DeserializationError {
     /// Create new deserialization error of given kind.
-    pub fn new(kind: DeserializeErrorKind) -> Self {
-        DeserializeError {
+    pub fn new(kind: DeserializationErrorKind) -> Self {
+        DeserializationError {
             kind
         }
     }
 }
 
-impl Display for DeserializeError {
+impl Display for DeserializationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "Deserialization error: {}", self.kind)
     }
 }
 
-impl From<DeserializeErrorKind> for DeserializeError {
-    fn from(kind: DeserializeErrorKind) -> Self {
-        DeserializeError::new(kind)
+impl From<DeserializationErrorKind> for DeserializationError {
+    fn from(kind: DeserializationErrorKind) -> Self {
+        DeserializationError::new(kind)
     }
 }
 
-impl From<ParseIntError> for DeserializeError {
+impl From<ParseIntError> for DeserializationError {
     fn from(error: ParseIntError) -> Self {
-        DeserializeError::new(DeserializeErrorKind::IntError(error))
+        DeserializationError::new(DeserializationErrorKind::IntError(error))
     }
 }
 
-impl From<StructDeserializeError> for DeserializeError {
+impl From<StructDeserializeError> for DeserializationError {
     fn from(error: StructDeserializeError) -> Self {
-        DeserializeError::new(DeserializeErrorKind::StructError(error))
+        DeserializationError::new(DeserializationErrorKind::StructError(error))
     }
 }
 
-impl Error for DeserializeError {}
+impl Error for DeserializationError {}
 
 /// Describes the kind of the struct deserialization error.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -181,7 +181,7 @@ impl Deserializer {
 
     /// Deserialize next available message from the stream of bytes.
     /// If there is no message yet to be deserialized, the returned vector is empty.
-    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Option<ClientMessage>, DeserializeError> {
+    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Option<ClientMessage>, DeserializationError> {
         debug!("deserializing {} bytes", bytes.len());
 
         // decode bytes into utf8 string
@@ -206,7 +206,7 @@ impl Deserializer {
                 if let Some(_) = error.error_len() {
                     warn!("invalid utf-8 sequence");
                     // invalid utf8 sequence
-                    return Err(DeserializeErrorKind::InvalidUtf8.into());
+                    return Err(DeserializationErrorKind::InvalidUtf8.into());
                 }
 
                 // last utf8 character is not complete
@@ -234,7 +234,7 @@ impl Deserializer {
 
                 if self.string_buffer.chars().count() > MAX_MESSAGE_LENGTH {
                     warn!("allowed message length exceeded");
-                    Err(DeserializeErrorKind::MessageLengthExceeded.into())
+                    Err(DeserializationErrorKind::MessageLengthExceeded.into())
                 } else {
                     Ok(None)
                 }
@@ -262,7 +262,7 @@ impl Deserializer {
 
 impl ClientMessage {
     /// Deserialize message from a string.
-    pub fn deserialize(serialized: &str) -> Result<Self, DeserializeError> {
+    pub fn deserialize(serialized: &str) -> Result<Self, DeserializationError> {
         // deserialize header
         let payload_start = find(serialized, PAYLOAD_START, ESCAPE);
 
@@ -303,7 +303,7 @@ impl ClientMessage {
             },
             "leave_game" => Ok(ClientMessage::LeaveGame),
             "disconnect" => Ok(ClientMessage::Disconnect),
-            _ => Err(DeserializeError::new(DeserializeErrorKind::UnknownHeader))
+            _ => Err(DeserializationError::new(DeserializationErrorKind::UnknownHeader))
         }
     }
 }
@@ -311,11 +311,11 @@ impl ClientMessage {
 /// A trait for items that can be deserialized from a message [Payload](Payload).
 trait DeserializeFromPayload: Sized {
     /// Deserialize self from message payload.
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError>;
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError>;
 }
 
 impl DeserializeFromPayload for SessionKey {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError> {
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let key = payload.take_string();
 
         if let Err(error) = key {
@@ -334,7 +334,7 @@ impl DeserializeFromPayload for SessionKey {
 }
 
 impl DeserializeFromPayload for Nickname {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError> {
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let nickname = payload.take_string();
 
         if let Err(error) = nickname {
@@ -353,7 +353,7 @@ impl DeserializeFromPayload for Nickname {
 }
 
 impl DeserializeFromPayload for Position {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError> {
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let row = payload.take_u8();
         let col = payload.take_u8();
 
@@ -379,7 +379,7 @@ impl DeserializeFromPayload for Position {
 }
 
 impl DeserializeFromPayload for Orientation {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError> {
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let string = payload.take_string();
 
         if let Err(error) = string {
@@ -396,13 +396,13 @@ impl DeserializeFromPayload for Orientation {
             _ => Err(
                 StructDeserializeError::new(
                     StructDeserializeErrorKind::Orientation,
-                    Box::new(DeserializeError::new(DeserializeErrorKind::InvalidEnumValue))).into())
+                    Box::new(DeserializationError::new(DeserializationErrorKind::InvalidEnumValue))).into())
         }
     }
 }
 
 impl DeserializeFromPayload for Placement {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError> {
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let position = Position::deserialize(payload);
         let orientation = Orientation::deserialize(payload);
 
@@ -424,7 +424,7 @@ impl DeserializeFromPayload for Placement {
 
 
 impl DeserializeFromPayload for Layout {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError> {
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let placements = ShipsPlacements::deserialize(payload);
 
         if let Err(error) = placements {
@@ -443,7 +443,7 @@ impl DeserializeFromPayload for Layout {
 }
 
 impl DeserializeFromPayload for ShipsPlacements {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError> {
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let size = payload.take_u8();
 
         if let Err(error) = size {
@@ -478,7 +478,7 @@ impl DeserializeFromPayload for ShipsPlacements {
 }
 
 impl DeserializeFromPayload for ShipKind {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializeError> {
+    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let string = payload.take_string();
 
         if let Err(error) = string {
@@ -496,7 +496,7 @@ impl DeserializeFromPayload for ShipKind {
             _ => Err(
                 StructDeserializeError::new(
                     StructDeserializeErrorKind::ShipKind,
-                    Box::new(DeserializeError::new(DeserializeErrorKind::InvalidEnumValue))).into())
+                    Box::new(DeserializationError::new(DeserializationErrorKind::InvalidEnumValue))).into())
         }
     }
 }
