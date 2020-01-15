@@ -99,7 +99,7 @@ impl Peer {
             }
         }
 
-        Ok(self.deserializer.take())
+        Ok(self.deserializer.take_messages())
     }
 
     /// Write as many buffered bytes as possible at the moment.
