@@ -1,5 +1,5 @@
 use mio::net::TcpStream;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, Shutdown};
 use crate::proto::{Deserializer, Serializer, ClientMessage, DeserializationError, ServerMessage};
 use mio::{Poll, Token, Ready, PollOpt};
 use std::{io, fmt};
@@ -139,6 +139,11 @@ impl Peer {
         self.serializer.clear(bytes_written);
 
         Ok(())
+    }
+
+    /// Close the peers stream.
+    fn close(&self) {
+        self.stream.shutdown(Shutdown::Both).expect("An error occurred while closing the stream.");
     }
 }
 
