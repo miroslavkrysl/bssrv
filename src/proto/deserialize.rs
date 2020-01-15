@@ -164,7 +164,6 @@ impl Error for StructDeserializeError {}
 /// the deserializer remembers previously not yet deserialized parts
 /// of the stream.
 pub struct Deserializer {
-    to_decode: Vec<u8>,
     byte_buffer: Vec<u8>,
     string_buffer: String,
 }
@@ -173,88 +172,84 @@ impl Deserializer {
     /// Create a new deserializer
     pub fn new() -> Self {
         Deserializer {
-            to_decode: Vec::new(),
             byte_buffer: Vec::new(),
             string_buffer: String::new(),
         }
     }
 
-    /// Deserialize next available message from the stream of bytes.
+    /// Deserialize all available messages from the stream of bytes.
     /// If there is no message yet to be deserialized, the returned vector is empty.
-    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Option<ClientMessage>, DeserializationError> {
-        debug!("deserializing {} bytes", bytes.len());
+    pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Vec<ClientMessage>, DeserializationError> {
+
+        // add new bytes to undecoded bytes from previous call
+        self.byte_buffer.extend_from_slice(bytes);
 
         // decode bytes into utf8 string
-        self.to_decode.clear();
-
-        if !self.byte_buffer.is_empty() {
-            self.to_decode.extend(self.byte_buffer.drain(..));
-        }
-
-        self.to_decode.extend_from_slice(bytes);
-
-        match std::str::from_utf8(&mut self.to_decode) {
+        match std::str::from_utf8(&mut self.byte_buffer) {
             Ok(string) => {
-                trace!("all bytes decoded into string");
-
                 // all bytes decoded into utf8 string
+
                 self.string_buffer.push_str(&string);
             },
             Err(error) => {
-                // some bytes are invalid
+                // some characters are invalid or incomplete
 
                 if let Some(_) = error.error_len() {
-                    warn!("invalid utf-8 sequence");
                     // invalid utf8 sequence
+
                     return Err(DeserializationErrorKind::InvalidUtf8.into());
                 }
 
-                // last utf8 character is not complete
-                trace!("last utf-8 char incomplete");
+                // last character is incomplete
 
-                let (complete, incomplete) = self.to_decode.split_at(error.valid_up_to());
-
+                // store complete characters into the string buffer
                 unsafe {
-                    // store complete sequence into string buffer
-                    self.string_buffer.push_str(std::str::from_utf8_unchecked(complete))
+                    self.string_buffer.push_str(std::str::from_utf8_unchecked(&self.byte_buffer[..error.valid_up_to()]))
                 }
 
-                // store incomplete character into byte buffer
-                self.byte_buffer.extend_from_slice(incomplete);
+                // move incomplete characters to the beginning of the byte buffer
+                self.byte_buffer.drain(..error.valid_up_to());
             },
         }
 
-        // deserialize next message from the string segment
-        let separator_pos = find(&self.string_buffer, MESSAGE_END, ESCAPE);
+        // deserialize decoded string into messages
 
-        match separator_pos {
-            None => {
-                // message is not complete yet
-                trace!("message is not complete");
+        // storage for deserialized messages
+        let mut messages = Vec::new();
 
-                if self.string_buffer.chars().count() > MAX_MESSAGE_LENGTH {
-                    warn!("allowed message length exceeded");
-                    Err(DeserializationErrorKind::MessageLengthExceeded.into())
-                } else {
-                    Ok(None)
-                }
-            },
-            Some(separator_pos) => {
-                trace!("a message end was found - deserializing");
+        let mut byte_offset = 0;
 
-                let message_str = &self.string_buffer[..separator_pos];
+        loop {
+            let separator_pos = find(&self.string_buffer[byte_offset..], MESSAGE_END, ESCAPE);
 
-                // unescape message end char
-                let message_string = unescape(message_str, &[MESSAGE_END], ESCAPE);
+            match separator_pos {
+                None => {
+                    // message is incomplete
 
-                // build message
-                let message = ClientMessage::deserialize(&message_string)?;
+                    if self.string_buffer[byte_offset..].len() > MAX_MESSAGE_LENGTH {
+                        // max message length exceeded
+                        return Err(DeserializationErrorKind::MessageLengthExceeded.into());
+                    }
 
-                self.string_buffer.drain(..(separator_pos + MESSAGE_END.len_utf8()));
+                    break;
+                },
+                Some(separator_pos) => {
+                    // a message end was found
 
-                Ok(Some(message))
-            },
+                    let message_str = &self.string_buffer[byte_offset..separator_pos];
+                    byte_offset = separator_pos + MESSAGE_END.len_utf8();
+
+                    // unescape message end character
+                    let message_string = unescape(message_str, &[MESSAGE_END], ESCAPE);
+
+                    // build message
+                    let message = ClientMessage::deserialize(&message_string)?;
+                    messages.push(message);
+                },
+            }
         }
+
+        Ok(messages)
     }
 }
 
