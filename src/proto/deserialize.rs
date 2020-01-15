@@ -8,7 +8,7 @@ use std::fmt;
 use std::error::Error;
 use std::num::ParseIntError;
 use std::collections::{HashMap, LinkedList};
-use log::{trace, error, info};
+use log::{trace, error, info, debug, warn};
 
 // ---ERRORS---
 
@@ -182,7 +182,7 @@ impl Deserializer {
     /// Deserialize all available messages from the stream of bytes.
     /// If there is no message yet to be deserialized, the returned vector is empty.
     pub fn deserialize(&mut self, bytes: &[u8]) -> Result<Vec<ClientMessage>, DeserializeError> {
-        info!("deserializing {} bytes", bytes.len());
+        debug!("deserializing {} bytes", bytes.len());
         let mut messages = Vec::new();
 
         // decode bytes into utf8 string
@@ -205,7 +205,7 @@ impl Deserializer {
                 // some bytes are invalid
 
                 if let Some(_) = error.error_len() {
-                    error!("invalid utf-8 sequence");
+                    warn!("invalid utf-8 sequence");
                     // invalid utf8 sequence
                     return Err(DeserializeErrorKind::InvalidUtf8.into());
                 }
@@ -237,7 +237,7 @@ impl Deserializer {
                     trace!("message is not complete");
 
                     if self.string_buffer[byte_offset..].len() > MAX_MESSAGE_LENGTH {
-                        error!("allowed message length exceeded");
+                        warn!("allowed message length exceeded");
                         return Err(DeserializeErrorKind::MessageLengthExceeded.into());
                     }
 

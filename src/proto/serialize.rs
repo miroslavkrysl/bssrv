@@ -2,7 +2,7 @@ use crate::proto::ServerMessage;
 use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload, escape, MESSAGE_END, ESCAPE};
 use crate::types::{Nickname, SessionKey, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
 use std::convert::TryInto;
-use log::{info, trace};
+use log::{info, trace, debug};
 
 // ---Stream serialize---
 
@@ -18,7 +18,7 @@ impl Serializer {
 
     /// Serialize message into the stream of bytes.
     pub fn serialize(&self, message: &ServerMessage) -> Vec<u8> {
-        info!("serializing a message");
+        debug!("serializing a message");
 
         let mut message_string = message.serialize();
 
