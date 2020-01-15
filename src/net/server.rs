@@ -1,49 +1,110 @@
-use crate::net::ServerManager;
 use mio::{Token, Poll, Events, Ready, PollOpt};
 use std::net::SocketAddr;
 use std::io;
 use mio::net::TcpListener;
 use std::collections::HashMap;
 use std::time::Duration;
-use crate::net::peer::{Peer, PeerError};
-use std::marker::PhantomData;
 use rand::Rng;
+use log::{trace, warn, error, info, debug};
+use std::sync::atomic::{AtomicBool, Ordering};
+use crate::net::ServerManager;
+use crate::net::peer::{Peer, PeerError};
 use crate::proto::ClientMessage;
+use std::sync::Arc;
 
+/// A handle containing an atomic boolean flag.
+/// It's used by in the Server to tell it to stop
+/// even from another thread.
+pub struct StopHandle {
+    should_stop: Arc<AtomicBool>
+}
 
+impl Clone for StopHandle {
+    fn clone(&self) -> Self {
+        StopHandle{
+            should_stop: self.should_stop.clone()
+        }
+    }
+}
+
+impl StopHandle {
+    /// Create a new stop handle, that returns should_stop = false
+    /// by default.
+    fn new() -> Self {
+        StopHandle {
+            should_stop: Arc::new(AtomicBool::new(false))
+        }
+    }
+
+    /// Ask the associated worker to stop
+    pub fn stop(&self) {
+        self.should_stop.store(true, Ordering::SeqCst)
+    }
+
+    /// Check the flag if the worker should stop.
+    pub fn should_stop(&self) -> bool {
+        self.should_stop.load(Ordering::SeqCst)
+    }
+}
+
+/// A TCP server.
+///
+/// In order to start the server logic, the run function must be called.
+///
+/// Continuously accepts new peers, read messages from them,
+/// passes the messages to the servers manager and than eventually writes
+/// back messages or disconnects the peers. It automatically disconnects
+/// inactive peers.
+///
+/// Can be stopped and closed from another thread by calling the stop function.
 pub struct Server {
     manager: ServerManager,
-    timeout: Duration,
+    peer_timeout: Duration,
     listener_token: Token,
     listener: TcpListener,
     peers: HashMap<Token, Peer>,
     poll: Poll,
     events: Events,
-    closed: bool
+    stop_handle: StopHandle,
 }
 
 impl Server {
-    pub fn new(address: &SocketAddr, timeout: Duration, manager: ServerManager) -> io::Result<Self> {
-        Ok(Server {
+
+    /// Create a new server.
+    ///
+    /// This function creates all structures needed for the server execution including
+    /// binding the listener address.
+    pub fn new(address: &SocketAddr, peer_timeout: Duration, manager: ServerManager) -> io::Result<Self> {
+        let mut server = Server {
             manager,
-            timeout,
+            peer_timeout,
             listener_token: Token(0),
             listener: TcpListener::bind(&address)?,
             peers: HashMap::new(),
             poll: Poll::new()?,
             events: Events::with_capacity(128),
-            closed: false
-        })
+            stop_handle: StopHandle::new(),
+        };
+
+        // register server listener for polling
+        server.poll.register(
+            &mut server.listener,
+            server.listener_token,
+            Ready::readable(),
+            PollOpt::edge())?;
+
+        Ok(server)
     }
 
+    /// Get the servers stop handle.
+    pub fn stop_handle(&self) -> &StopHandle {
+        &self.stop_handle
+    }
+
+    /// Run the server.
     pub fn run(&mut self) -> Result<(), io::Error> {
-        let mut i = 0;
-        self.poll.register(&mut self.listener, self.listener_token, Ready::readable(),
-                      PollOpt::edge())?;
-        loop {
-            println!("loop {}", i);
-            i += 1;
-            self.poll.poll(&mut self.events, Some(self.timeout))?;
+        while !self.stop_handle.should_stop() {
+            self.poll.poll(&mut self.events, Some(Duration::from_secs(1)))?;
 
             for event in self.events.iter() {
                 if event.token() == self.listener_token {
@@ -91,8 +152,15 @@ impl Server {
                 }
             }
         }
+
+        // TODO: disconnects peers
+
+        info!("closing the server");
+
+        Ok(())
     }
 
+    /// Get unique token for a new peer.
     fn unique_token(&self) -> Token {
         loop {
             let token = Token(rand::thread_rng().gen());
