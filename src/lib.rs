@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use std::str::FromStr;
 use crate::net::{Server, Poller, PollEvent, PeerErrorKind};
-use crate::proto::{ClientMessage, ServerMessage};
+use crate::proto::{ServerMessage};
 use std::collections::HashSet;
 use std::ops::Div;
 use crate::app::App;
@@ -45,7 +45,7 @@ impl Default for Config {
         Config {
             address: SocketAddr::from_str("127.0.0.1:8191").unwrap(),
             max_players: 128,
-            peer_timeout: Duration::from_secs(10)
+            peer_timeout: Duration::from_secs(120)
         }
     }
 }

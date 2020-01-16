@@ -10,11 +10,11 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(key: u64, nickname: Nickname) -> Self {
+    pub fn new(key: u64, nickname: Nickname, peer: usize) -> Self {
         Session {
             key,
             nickname,
-            peer: None,
+            peer: Some(peer),
             game: None,
             last_active: Instant::now()
         }
@@ -22,6 +22,10 @@ impl Session {
 
     pub fn update_last_active(&mut self) {
         self.last_active = Instant::now()
+    }
+
+    pub fn nickname(&self) -> &Nickname {
+        &self.nickname
     }
 
     pub fn peer(&self) -> Option<usize> {
