@@ -4,6 +4,7 @@ pub mod net;
 pub mod session;
 pub mod app;
 pub mod game;
+pub mod storage;
 
 
 use std::net::SocketAddr;
@@ -148,7 +149,7 @@ pub fn run_game_server(config: Config) {
             let peer = server.remove_peer(&id).unwrap();
             poller.deregister_peer(&peer, &id).unwrap();
 
-            // TODO: app handle closed
+            app.handle_offline(&id);
         }
 
         // Handle new peers
@@ -156,12 +157,12 @@ pub fn run_game_server(config: Config) {
             let peer = server.peer(&id).unwrap();
             poller.register_peer(&peer, id).unwrap();
 
-            // TODO: app handle new
+            // TODO: app handle new peers
         }
 
         // Handle incoming messages
         for (id, message) in incoming_messages.drain(..) {
-            let mut result = app.handle_message(id, message);
+            let mut result = app.handle_message(&id, message);
             commands.extend(result.drain(..));
         }
 
