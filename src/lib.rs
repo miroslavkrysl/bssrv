@@ -7,12 +7,13 @@ pub mod net;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::str::FromStr;
 use crate::net::{Server, Poller, PollEvent, PeerErrorKind, Peer};
 use crate::proto::{ClientMessage, ServerMessage};
 use std::io::Error;
 use std::collections::HashSet;
+use std::ops::Div;
 
 
 /// A configuration values for the run_game_server function.
@@ -74,6 +75,9 @@ pub fn run_game_server(config: Config) {
     // register servers listener for polling
     poller.register_listener(server.listener(), 0).unwrap();
 
+    let peer_timeout = config.peer_timeout;
+    let poll_timeout = peer_timeout.div(2);
+
     let mut events = Vec::new();
     let mut new_peers = HashSet::new();
     let mut closed_peers = HashSet::new();
@@ -82,7 +86,7 @@ pub fn run_game_server(config: Config) {
     let mut reregister_peers = HashSet::new();
 
     loop {
-        poller.poll(&mut events, Some(Duration::from_secs(1))).unwrap();
+        poller.poll(&mut events, Some(poll_timeout)).unwrap();
 
         for event in events.drain(..) {
             match event {
@@ -125,6 +129,16 @@ pub fn run_game_server(config: Config) {
                         },
                     }
                 },
+            }
+        }
+
+        let now = Instant::now();
+
+        // Handle timeouts
+        for (id, peer) in server.peers() {
+            if now.duration_since(peer.last_active()) >= peer_timeout {
+                closed_peers.insert(id.clone());
+                peer.close();
             }
         }
 

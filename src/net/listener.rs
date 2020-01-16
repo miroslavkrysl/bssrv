@@ -12,8 +12,6 @@ pub struct Listener {
 impl Listener {
     /// Create a new listener.
     pub fn new(address: SocketAddr) -> io::Result<Self> {
-        println!("listener");
-
         Ok(Listener {
             address,
             listener: TcpListener::bind(&address)?

@@ -4,6 +4,7 @@ use crate::net::peer::Peer;
 use rand::Rng;
 use std::net::SocketAddr;
 use std::io;
+use std::collections::hash_map;
 
 pub struct Server {
     listener: Listener,
@@ -54,5 +55,9 @@ impl Server {
 
     pub fn peer_mut(&mut self, id: &usize) -> Option<&mut Peer> {
         self.peers.get_mut(id)
+    }
+
+    pub fn peers(&self) -> hash_map::Iter<usize, Peer> {
+        self.peers.iter()
     }
 }

@@ -6,13 +6,15 @@ use std::{io, fmt};
 use std::fmt::{Display, Formatter};
 use std::error::Error;
 use std::io::{Read, Write};
+use std::time::Instant;
 
 /// A network remote point with associated stream, address, serializer and deserializer.
 pub struct Peer {
     stream: TcpStream,
     address: SocketAddr,
     deserializer: Deserializer,
-    serializer: Serializer
+    serializer: Serializer,
+    last_active: Instant
 }
 
 impl Peer {
@@ -22,13 +24,19 @@ impl Peer {
             stream,
             address,
             deserializer: Deserializer::new(),
-            serializer: Serializer::new()
+            serializer: Serializer::new(),
+            last_active: Instant::now()
         }
     }
 
     /// Get the peers remote address.
     pub fn address(&self) -> &SocketAddr {
         &self.address
+    }
+
+    /// Get the last time point when something was received from the peer.
+    pub fn last_active(&self) -> Instant {
+        self.last_active
     }
 
     /// Register the peer for polling.
@@ -67,7 +75,8 @@ impl Peer {
 
     /// Read as much data as possible at the moment from peer and build messages from it.
     pub fn do_read(&mut self) -> Result<Vec<ClientMessage>, PeerError> {
-
+        self.last_active = Instant::now();
+        
         // buffer for incoming bytes
         let mut buffer = [0; 1024];
 
