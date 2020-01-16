@@ -8,6 +8,7 @@ use std::ops::AddAssign;
 pub enum DomainErrorKind {
     InvalidLength,
     InvalidCharacters,
+    InvalidCombination,
     OutOfRange
 }
 
@@ -35,6 +36,7 @@ impl Display for DomainError {
         match self.kind {
             DomainErrorKind::InvalidLength => write!(f, "Invalid length: {}", self.because),
             DomainErrorKind::InvalidCharacters => write!(f, "Invalid characters: {}", self.because),
+            DomainErrorKind::InvalidCombination => write!(f, "Invalid combination: {}", self.because),
             DomainErrorKind::OutOfRange => write!(f, "Out of range: {}", self.because)
         }
     }
@@ -277,6 +279,126 @@ impl Layout {
 
     pub fn placements(&self) -> &ShipsPlacements {
         &self.placements
+    }
+
+    fn is_valid(&self) -> bool {
+        let mut board = [[false; 10]; 10];
+
+        for (kind, placement) in self.placements.placements() {
+            let cells = kind.cells();
+            let mut row: i32 = placement.position().row() as i32;
+            let mut col: i32 = placement.position().col() as i32;
+
+            let inc_r: i32;
+            let inc_c: i32;
+
+            match placement.orientation() {
+                Orientation::East => {
+                    inc_r = 0;
+                    inc_c = 1;
+                },
+                Orientation::North => {
+                    inc_r = -1;
+                    inc_c = 0;
+                },
+                Orientation::West => {
+                    inc_r = 0;
+                    inc_c = -1;
+                },
+                Orientation::South => {
+                    inc_r = 1;
+                    inc_c = 0;
+                },
+            }
+
+            // mark ship cells
+            for i in 0..cells {
+                // check if in board bounds
+                if row < 0 || row >= 10 || col < 0 || col >= 10 {
+                    return false;
+                }
+
+                if board[row as usize][col as usize] {
+                    // occupied
+                    return false
+                }
+
+                board[row as usize][col as usize] = true;
+
+                // check surroundings
+
+                if i == 0 {
+                    // first cell
+                    let r = row - inc_r;
+                    let c = col - inc_c;
+
+                    if r < 0 || r >= 10 || c < 0 || c >= 10 {
+                        // not in board
+                    } else {
+                        if board[r as usize][c as usize] {
+                            // neighbor occupied
+                            return false
+                        }
+                    }
+                }
+
+                if i == cells - 1 {
+                    // last cell
+
+                    // first cell
+                    let r = row + inc_r;
+                    let c = col + inc_c;
+
+                    if r < 0 || r >= 10 || c < 0 || c >= 10 {
+                        // not in board
+                    } else {
+                        if board[r as usize][c as usize] {
+                            // neighbor occupied
+                            return false
+                        }
+                    }
+                }
+
+                let mut r1 = row;
+                let mut c1 = col;
+                let mut r2 = row;
+                let mut c2 = col;
+
+                if inc_r == 0 {
+                    r1 = row + 1;
+                    r2 = row - 1;
+                }
+
+                if inc_c == 0 {
+                    c1 = col + 1;
+                    c2 = col - 1;
+                }
+
+                if r1 < 0 || r1 >= 10 || c1 < 0 || c1 >= 10 {
+                    // not in board
+                } else {
+                    if board[r1 as usize][c1 as usize] {
+                        // neighbor occupied
+                        return false
+                    }
+                }
+
+                if r2 < 0 || r2 >= 10 || c2 < 0 || c2 >= 10 {
+                    // not in board
+                } else {
+                    if board[r2 as usize][c2 as usize] {
+                        // neighbor occupied
+                        return false
+                    }
+                }
+
+
+                row += inc_r;
+                col += inc_c;
+            }
+        }
+
+        return true;
     }
 }
 

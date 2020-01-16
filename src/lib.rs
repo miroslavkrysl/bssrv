@@ -3,7 +3,7 @@ pub mod types;
 pub mod net;
 pub mod session;
 pub mod app;
-pub mod game;
+//pub mod game;
 
 
 use std::net::SocketAddr;

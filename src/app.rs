@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use crate::types::{SessionKey, Nickname, RestoreState};
 use crate::session::Session;
-use crate::game::{Game, GamePending};
 use crate::proto::{ClientMessage, ServerMessage};
 use crate::Command;
 use crate::Command::Message;
@@ -12,7 +11,7 @@ pub struct App {
     /// Sessions map indexed by session keys.
     sessions: HashMap<u64, RefCell<Session>>,
     /// Games map indexed by games ids.
-    games: HashMap<usize, Game>,
+//    games: HashMap<usize, Game>,
     /// Sessions map indexed by peers ids.
     peers_sessions: HashMap<usize, u64>,
     /// A pending game with only one player.
@@ -23,7 +22,7 @@ impl App {
     pub fn new() -> Self {
         App {
             sessions: HashMap::new(),
-            games: HashMap::new(),
+//            games: HashMap::new(),
             peers_sessions: HashMap::new(),
             pending_game: None,
         }
@@ -34,8 +33,11 @@ impl App {
             ClientMessage::Alive => return self.handle_alive(peer),
             ClientMessage::RestoreSession(session_key) => return self.handle_restore_session(peer, session_key),
             ClientMessage::Login(nickname) => return self.handle_login(peer, nickname),
-            ClientMessage::JoinGame => return self.handle_join_game(peer),
-//            ClientMessage::Layout(_) => {},
+//            ClientMessage::JoinGame => return self.handle_join_game(peer),
+            ClientMessage::Layout(layout) => {
+                println!("{}", layout);
+                vec![]
+            },
 //            ClientMessage::Shoot(_) => {},
 //            ClientMessage::LeaveGame => {},
             ClientMessage::LogOut => return self.handle_logout(peer),
@@ -101,54 +103,54 @@ impl App {
     }
 
 
-    fn handle_join_game(&mut self, peer: usize) -> Vec<Command> {
-        match self.peers_sessions.get(&peer).cloned() {
-            Some(key) => {
-                // is logged
-
-                let mut session = self.sessions.get(&key).unwrap().borrow_mut();
-
-                match session.game() {
-                    None => {
-                        // not in any game
-                        match self.pending_game {
-                            None => {
-                                // no pending game, so create one
-
-                                let id = self.unique_game_id();
-                                self.games.insert(id, Game::Pending(GamePending::new(key)));
-                                self.pending_game = Some(id);
-
-                                vec![Message(peer, ServerMessage::JoinGameWait)]
-                            },
-                            Some(id) => {
-                                // a pending game is present
-
-                                let game = self.games.get_mut(&id).unwrap();
-                                let opponent_key = game.first_player();
-                                let opponent = self.sessions.get(&opponent_key).unwrap().borrow();
-
-                                game.add_second_player(opponent_key);
-
-                                vec![
-                                    Message(opponent.peer().unwrap(), ServerMessage::OpponentJoined(session.nickname().clone())),
-                                    Message(peer, ServerMessage::JoinGameOk(opponent.nickname().clone()))
-                                ]
-                            },
-                        }
-                    },
-                    Some(_) => {
-                        // already in a game
-                        vec![Message(peer, ServerMessage::IllegalState)]
-                    },
-                }
-            }
-            None => {
-                // not logged
-                vec![Message(peer, ServerMessage::IllegalState)]
-            }
-        }
-    }
+//    fn handle_join_game(&mut self, peer: usize) -> Vec<Command> {
+//        match self.peers_sessions.get(&peer).cloned() {
+//            Some(key) => {
+//                // is logged
+//
+//                let mut session = self.sessions.get(&key).unwrap().borrow_mut();
+//
+//                match session.game() {
+//                    None => {
+//                        // not in any game
+//                        match self.pending_game {
+//                            None => {
+//                                // no pending game, so create one
+//
+//                                let id = self.unique_game_id();
+//                                self.games.insert(id, Game::Pending(GamePending::new(key)));
+//                                self.pending_game = Some(id);
+//
+//                                vec![Message(peer, ServerMessage::JoinGameWait)]
+//                            },
+//                            Some(id) => {
+//                                // a pending game is present
+//
+//                                let game = self.games.get_mut(&id).unwrap();
+//                                let opponent_key = game.first_player();
+//                                let opponent = self.sessions.get(&opponent_key).unwrap().borrow();
+//
+//                                game.add_second_player(opponent_key);
+//
+//                                vec![
+//                                    Message(opponent.peer().unwrap(), ServerMessage::OpponentJoined(session.nickname().clone())),
+//                                    Message(peer, ServerMessage::JoinGameOk(opponent.nickname().clone()))
+//                                ]
+//                            },
+//                        }
+//                    },
+//                    Some(_) => {
+//                        // already in a game
+//                        vec![Message(peer, ServerMessage::IllegalState)]
+//                    },
+//                }
+//            }
+//            None => {
+//                // not logged
+//                vec![Message(peer, ServerMessage::IllegalState)]
+//            }
+//        }
+//    }
 
     fn handle_logout(&mut self, peer: usize) -> Vec<Command> {
         // TODO: add in game handling
@@ -173,12 +175,12 @@ impl App {
         }
     }
 
-    fn unique_game_id(&self) -> usize {
-        loop {
-            let id = rand::thread_rng().gen();
-            if !self.games.contains_key(&id) {
-                break id;
-            }
-        }
-    }
+//    fn unique_game_id(&self) -> usize {
+//        loop {
+//            let id = rand::thread_rng().gen();
+//            if !self.games.contains_key(&id) {
+//                break id;
+//            }
+//        }
+//    }
 }

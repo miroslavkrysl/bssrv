@@ -1,4 +1,4 @@
-use crate::types::{Placement, ShipsPlacements, Who, Hits, Position, ShipKind, Orientation};
+use crate::types::{Placement, ShipsPlacements, Who, Hits, Position, ShipKind, Orientation, Layout};
 use std::collections::HashMap;
 
 pub enum Game {
@@ -28,8 +28,8 @@ impl GamePending {
 pub struct GameLayouting {
     first_player: u64,
     second_player: u64,
-    first_layout: Option<ShipsPlacements>,
-    second_layout: Option<ShipsPlacements>,
+    first_layout: Option<Layout>,
+    second_layout: Option<Layout>,
 }
 
 impl GameLayouting {
@@ -42,7 +42,7 @@ impl GameLayouting {
         }
     }
 
-    pub fn set_layout(&mut self, player: u64, layout: ShipsPlacements) -> Result<bool, GameError> {
+    pub fn set_layout(&mut self, player: u64, layout: Layout) -> Result<bool, GameError> {
         let l = match player {
             id if id == self.first_player => {
                 &mut self.first_layout
@@ -68,126 +68,6 @@ impl GameLayouting {
         Ok(self.first_layout.is_some() && self.second_layout.is_some())
     }
 
-    fn is_valid_layout(layout: &ShipsPlacements) -> bool {
-        let mut board = [[false; 10]; 10];
-
-        for (kind, placement) in layout.placements() {
-            let cells = kind.cells();
-            let mut row: i32 = placement.position().row() as i32;
-            let mut col: i32 = placement.position().col() as i32;
-
-            let inc_r: i32;
-            let inc_c: i32;
-
-            match placement.orientation() {
-                Orientation::East => {
-                    inc_r = 0;
-                    inc_c = 1;
-                },
-                Orientation::North => {
-                    inc_r = -1;
-                    inc_c = 0;
-                },
-                Orientation::West => {
-                    inc_r = 0;
-                    inc_c = -1;
-                },
-                Orientation::South => {
-                    inc_r = 1;
-                    inc_c = 0;
-                },
-            }
-
-            // mark ship cells
-            for i in 0..cells {
-                // check if in board bounds
-                if row < 0 || row >= 10 || col < 0 || col >= 10 {
-                    return false;
-                }
-
-                if board[row as usize][col as usize] {
-                    // occupied
-                    return false
-                }
-
-                board[row as usize][col as usize] = true;
-
-                // check surroundings
-
-                if i == 0 {
-                    // first cell
-                    let r = row - inc_r;
-                    let c = col - inc_c;
-
-                    if row < 0 || row >= 10 || col < 0 || col >= 10 {
-                        // not in board
-                    } else {
-                        if board[row as usize][col as usize] {
-                            // neighbor occupied
-                            return false
-                        }
-                    }
-                }
-
-                if i == cells - 1 {
-                    // last cell
-
-                    // first cell
-                    let r = row + inc_r;
-                    let c = col + inc_c;
-
-                    if row < 0 || row >= 10 || col < 0 || col >= 10 {
-                        // not in board
-                    } else {
-                        if board[row as usize][col as usize] {
-                            // neighbor occupied
-                            return false
-                        }
-                    }
-                }
-
-                let mut r1 = row;
-                let mut c1 = col;
-                let mut r2 = row;
-                let mut c2 = col;
-
-                if inc_r == 0 {
-                    r1 = row + 1;
-                    r2 = row - 1;
-                }
-
-                if inc_c == 0 {
-                    c1 = col + 1;
-                    c2 = col - 1;
-                }
-
-                if r1 < 0 || r1 >= 10 || c1 < 0 || c1 >= 10 {
-                    // not in board
-                } else {
-                    if board[r1 as usize][c1 as usize] {
-                        // neighbor occupied
-                        return false
-                    }
-                }
-
-                if r2 < 0 || r2 >= 10 || c2 < 0 || c2 >= 10 {
-                    // not in board
-                } else {
-                    if board[r2 as usize][c2 as usize] {
-                        // neighbor occupied
-                        return false
-                    }
-                }
-
-
-                row += inc_r;
-                col += inc_c;
-            }
-        }
-
-        return true;
-    }
-
     pub fn start(self) -> GamePlaying {
         GamePlaying::new(
             self.first_player,
@@ -201,8 +81,8 @@ impl GameLayouting {
 pub struct GamePlaying {
     first_player: u64,
     second_player: u64,
-    first_layout: ShipsPlacements,
-    second_layout: ShipsPlacements,
+    first_layout: Layout,
+    second_layout: Layout,
     first_board: [[bool; 10]; 10],
     second_board: [[bool; 10]; 10],
     first_fleet: HashMap<ShipKind, u8>,
@@ -212,7 +92,7 @@ pub struct GamePlaying {
 }
 
 impl GamePlaying {
-    fn new(first_player: u64, second_player: u64, first_layout: ShipsPlacements, second_layout: ShipsPlacements) -> Self {
+    fn new(first_player: u64, second_player: u64, first_layout: Layout, second_layout: Layout) -> Self {
         let mut fleet = HashMap::new();
         fleet.insert(ShipKind::AircraftCarrier, ShipKind::AircraftCarrier.cells());
         fleet.insert(ShipKind::Battleship, ShipKind::Battleship.cells());
