@@ -1,4 +1,4 @@
-use crate::types::{Layout, Placement, ShipsPlacements, Who, Hits, Position, ShipKind};
+use crate::types::{Placement, ShipsPlacements, Who, Hits, Position, ShipKind, Orientation};
 use std::collections::HashMap;
 
 pub enum Game {
@@ -28,8 +28,8 @@ impl GamePending {
 pub struct GameLayouting {
     first_player: u64,
     second_player: u64,
-    first_layout: Option<Layout>,
-    second_layout: Option<Layout>,
+    first_layout: Option<ShipsPlacements>,
+    second_layout: Option<ShipsPlacements>,
 }
 
 impl GameLayouting {
@@ -42,7 +42,7 @@ impl GameLayouting {
         }
     }
 
-    pub fn set_layout(&mut self, player: u64, layout: Layout) -> Result<bool, GameError> {
+    pub fn set_layout(&mut self, player: u64, layout: ShipsPlacements) -> Result<bool, GameError> {
         let l = match player {
             id if id == self.first_player => {
                 &mut self.first_layout
@@ -68,7 +68,7 @@ impl GameLayouting {
         Ok(self.first_layout.is_some() && self.second_layout.is_some())
     }
 
-    fn is_valid_layout(layout: &Layout) -> bool {
+    fn is_valid_layout(layout: &ShipsPlacements) -> bool {
         // TODO: validate layout
         return true;
     }
@@ -86,17 +86,18 @@ impl GameLayouting {
 pub struct GamePlaying {
     first_player: u64,
     second_player: u64,
-    first_layout: Layout,
-    second_layout: Layout,
+    first_layout: ShipsPlacements,
+    second_layout: ShipsPlacements,
     first_board: [[bool; 10]; 10],
     second_board: [[bool; 10]; 10],
     first_fleet: HashMap<ShipKind, u8>,
     second_fleet: HashMap<ShipKind, u8>,
     on_turn: u64,
+    winner: Option<u64>,
 }
 
 impl GamePlaying {
-    fn new(first_player: u64, second_player: u64, first_layout: Layout, second_layout: Layout) -> Self {
+    fn new(first_player: u64, second_player: u64, first_layout: ShipsPlacements, second_layout: ShipsPlacements) -> Self {
         let mut fleet = HashMap::new();
         fleet.insert(ShipKind::AircraftCarrier, ShipKind::AircraftCarrier.cells());
         fleet.insert(ShipKind::Battleship, ShipKind::Battleship.cells());
@@ -114,6 +115,7 @@ impl GamePlaying {
             first_fleet: fleet.clone(),
             second_fleet: fleet,
             on_turn: first_player,
+            winner: None
         }
     }
 
@@ -144,37 +146,96 @@ impl GamePlaying {
             }
         };
 
+        if let Some(winner) = self.winner {
+            panic!("game is over");
+        }
+
         if player != self.on_turn {
             return Err(GameError::NotOnTurn)
         }
 
+        // cell is already hit
         if opponent_board[position.row() as usize][position.col() as usize] {
             return Ok(ShootResult::Hit);
         }
 
-        let hit = false;
+        let mut result = ShootResult::Missed;
 
-        // TODO: hit ship
+        // check if any ship is hit
+        for (kind, placement) in opponent_layout.placements() {
+            let cells = kind.cells();
+            let mut row: i32 = placement.position().row() as i32;
+            let mut col: i32 = placement.position().col() as i32;
 
-        for (kind, health) in opponent_fleet {
-            if *health == 0 {
-                return Ok(ShootResult::GameOver(player))
+            let inc_r: i32;
+            let inc_c: i32;
+
+            match placement.orientation() {
+                Orientation::East => {
+                    inc_c = 1;
+                    inc_r = 0;
+                },
+                Orientation::North => {
+                    inc_c = 0;
+                    inc_r = -1;
+                },
+                Orientation::West => {
+                    inc_c = -1;
+                    inc_r = 0;
+                },
+                Orientation::South => {
+                    inc_c = 0;
+                    inc_r = 1;
+                },
+            }
+
+            for i in 0..cells {
+                if position.row() as i32 == row && position.col() as i32 == col {
+                    result = ShootResult::Hit;
+                    let health = *opponent_fleet.get_mut(kind).unwrap();
+
+                    if health == 0 {
+                        result = ShootResult::Sunk(placement.clone());
+                    }
+
+                    break;
+                }
+
+                row += inc_r;
+                col += inc_c;
+            }
+
+            if result != ShootResult::Missed {
+                break;
             }
         }
 
-        Ok(if hit {ShootResult::Hit} else {ShootResult::Missed})
+        // check whether the all opponent ships are sunk
+        self.winner = Some(player);
+
+        for (kind, health) in opponent_fleet {
+            if *health != 0 {
+                self.winner = None;
+            }
+        }
+
+        Ok(result)
     }
 
-    pub fn get_state(&self, player: u64) -> (Who, Hits, Layout, Hits, ShipsPlacements) {
-        // TODO: implement get game state
+//    pub fn state(&self, player: u64) -> (Who, Hits, ShipsPlacements, Hits, ShipsPlacements) {
+//        // TODO: implement get game state
+//    }
+
+    pub fn winner(self) -> Option<u64> {
+        self.winner
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum ShootResult {
     Missed,
     Hit,
     Sunk(Placement),
-    GameOver(u64),
 }
 
 pub enum GameError {

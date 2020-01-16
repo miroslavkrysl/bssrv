@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use std::collections::HashMap;
+use std::ops::AddAssign;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum DomainErrorKind {
@@ -274,8 +275,8 @@ impl Layout {
         Ok(Layout { placements })
     }
 
-    pub fn placements(&self) -> &HashMap<ShipKind, Placement> {
-        &self.placements.placements()
+    pub fn placements(&self) -> &ShipsPlacements {
+        &self.placements
     }
 }
 
