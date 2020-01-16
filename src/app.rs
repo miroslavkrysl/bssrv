@@ -185,10 +185,12 @@ impl App {
     fn handle_logout(&mut self, peer_id: &usize) -> Vec<Command> {
         debug!("peer {:0>16X}: logging out", peer_id);
 
+        let mut commands = Vec::new();
+
         match self.peer_session(&peer_id) {
             None => {
                 warn!("peer {:0>16X}: can't log out because not logged yet", peer_id);
-                vec![Message(*peer_id, ServerMessage::IllegalState)]
+                commands.push(Message(*peer_id, ServerMessage::IllegalState))
             },
             Some(session_id) => {
                 trace!("peer {:0>16X}: session {:0>16X}", peer_id, session_id);
@@ -225,10 +227,55 @@ impl App {
                 self.remove_session(session_id);
                 self.remove_peer_session(peer_id);
                 commands.push(Message(*peer_id, ServerMessage::LogoutOk));
-
-                commands
             },
         }
+
+        commands
+    }
+
+    /// Handle the peer socket disconnection.
+    pub fn handle_offline(&mut self, peer_id: &usize) -> Vec<Command> {
+        debug!("peer {:0>16X}: switching to offline", peer_id);
+
+        let mut commands = Vec::new();
+
+        match self.peer_session(&peer_id) {
+            None => {
+                trace!("no session");
+            },
+            Some(session_id) => {
+                trace!("session {:0>16X}", peer_id);
+                let mut session = self.session(session_id);
+
+                // handle if the session is in any game
+                match session.game() {
+                    None => {
+                        trace!("not in any game");
+
+                        if let Some(player) = self.pending_player {
+                            if player == *session_id {
+                                trace!("waiting for a game - removing");
+                                self.pending_player = None;
+                            }
+                        }
+                    },
+                    Some(game_id) => {
+                        let game = self.remove_game(game_id);
+                        let mut opponent = self.session(&game.other_player(session_id));
+
+                        trace!("in a game {:0>16X} - notifying opponent {:0>16X}", game_id, opponent.key());
+
+                        if let Some(opponent_peer_id) = opponent.peer() {
+                            commands.push(Message(*opponent_peer_id, ServerMessage::OpponentOffline))
+                        }
+                    },
+                }
+
+                session.set_peer(None);
+            },
+        }
+
+        commands
     }
 
     fn peer_session(&self, peer_id: &usize) -> Option<&u64> {
