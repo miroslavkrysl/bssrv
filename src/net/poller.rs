@@ -6,7 +6,7 @@ use std::time::Duration;
 use std::collections::HashSet;
 
 /// An event which can happen on a listener or a peer.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PollEvent {
     /// A new peer can be accepted on listener with the particular id.
     Accept(usize),
@@ -19,8 +19,7 @@ pub enum PollEvent {
 /// Polls for readiness events on all registered listeners and peers.
 pub struct Poller {
     poll: Poll,
-    sys_events: Events,
-    events: Vec<PollEvent>,
+    events: Events,
     listeners: HashSet<usize>,
     peers: HashSet<usize>,
 }
@@ -30,8 +29,7 @@ impl Poller {
     pub fn new(capacity: usize) -> io::Result<Poller> {
         Ok(Poller {
             poll: Poll::new()?,
-            sys_events: Events::with_capacity(capacity),
-            events: Vec::with_capacity(capacity),
+            events: Events::with_capacity(capacity),
             listeners: HashSet::new(),
             peers: HashSet::new()
         })
@@ -90,36 +88,37 @@ impl Poller {
     }
 
     /// Poll for events on registered listeners and peers.
-    pub fn poll(&mut self, timeout: Option<Duration>) -> io::Result<&[PollEvent]> {
+    /// Events is stored in the provided vector, which is cleared before.
+    pub fn poll(&mut self, events: &mut Vec<PollEvent>, timeout: Option<Duration>) -> io::Result<()> {
         // clear events list from previous call
-        self.events.clear();
+        events.clear();
 
-        self.poll.poll(&mut self.sys_events, timeout)?;
+        self.poll.poll(&mut self.events, timeout)?;
 
-        for event in self.sys_events.iter() {
+        for event in self.events.iter() {
             let id = event.token().0;
 
             if self.listeners.contains(&id) {
                 // a listener can accept a new peer
 
-                self.events.push(PollEvent::Accept(id))
+                events.push(PollEvent::Accept(id))
             } else if self.peers.contains(&id) {
                 // a peer event
 
                 if event.readiness().is_readable() {
                     // peer has incoming data to read
-                    self.events.push(PollEvent::Read(id));
+                    events.push(PollEvent::Read(id));
                 }
 
                 if event.readiness().is_writable() {
                     // peer can be written into
-                    self.events.push(PollEvent::Write(id))
+                    events.push(PollEvent::Write(id))
                 }
             } else {
                 // sporadic events happen
             }
         }
-
-        Ok(&self.events)
+        
+        Ok(())
     }
 }

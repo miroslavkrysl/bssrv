@@ -1,12 +1,12 @@
 use simplelog::{TermLogger, TerminalMode};
 use log::LevelFilter;
-use bssrv::{run_server, Config};
+use bssrv::{run_game_server, Config};
 
 fn main() {
     TermLogger::init(LevelFilter::Trace, simplelog::Config::default(), TerminalMode::Stderr).unwrap();
 
     println!("main");
-    run_server(Config::default());
+    run_game_server(Config::default());
 
 
 
