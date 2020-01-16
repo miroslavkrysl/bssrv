@@ -61,6 +61,7 @@ pub enum ServerMessage {
     Disconnect,
     OpponentJoined(Nickname),
     OpponentReady,
+    OpponentOffline,
     OpponentLeft,
     OpponentMissed(Position),
     OpponentHit(Position),
@@ -106,6 +107,8 @@ impl Display for ServerMessage {
                 write!(f, "[opponent joined: {}]", opponent),
             ServerMessage::OpponentReady =>
                 write!(f, "[opponent ready]"),
+            ServerMessage::OpponentOffline =>
+                write!(f, "[opponent offline]"),
             ServerMessage::OpponentLeft =>
                 write!(f, "[opponent left]"),
             ServerMessage::OpponentMissed(position) =>

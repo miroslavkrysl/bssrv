@@ -123,6 +123,9 @@ impl ServerMessage {
             ServerMessage::OpponentReady => {
                 serialized.push_str("opponent_ready");
             }
+            ServerMessage::OpponentOffline => {
+                serialized.push_str("opponent_offline");
+            }
             ServerMessage::OpponentLeft => {
                 serialized.push_str("opponent_left");
             }
