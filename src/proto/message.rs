@@ -1,7 +1,7 @@
 //! Battleships protocol message types,
 //! And payload container.
 
-use crate::types::{SessionKey, Nickname, Layout, Position, RestoreState, ShipKind};
+use crate::types::{SessionKey, Nickname, Layout, Position, RestoreState, ShipKind, Who};
 use std::fmt::{Formatter, Display};
 use std::fmt;
 
@@ -63,7 +63,8 @@ pub enum ServerMessage {
     OpponentReady,
     OpponentLeft,
     OpponentMissed(Position),
-    OpponentHit(Position)
+    OpponentHit(Position),
+    GameOver(Who),
 }
 
 impl Display for ServerMessage {
@@ -111,6 +112,8 @@ impl Display for ServerMessage {
                 write!(f, "[opponent missed: {}]", position),
             ServerMessage::OpponentHit(position) =>
                 write!(f, "[opponent hit: {}]", position),
+            ServerMessage::GameOver(winner) =>
+                write!(f, "[game over: {}]", winner),
         }
     }
 }

@@ -134,6 +134,10 @@ impl ServerMessage {
                 serialized.push_str("opponent_hit");
                 position.serialize(&mut payload);
             }
+            ServerMessage::GameOver(winner) => {
+                serialized.push_str("game_over");
+                winner.serialize(&mut payload);
+            }
         }
 
         if let Some(ref serialized_payload) = payload.serialize() {
