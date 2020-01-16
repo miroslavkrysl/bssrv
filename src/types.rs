@@ -117,6 +117,18 @@ pub enum ShipKind {
     PatrolBoat
 }
 
+impl ShipKind {
+    pub fn cells(&self) -> u8 {
+        match self {
+            ShipKind::AircraftCarrier => 5,
+            ShipKind::Battleship => 4,
+            ShipKind::Cruiser => 3,
+            ShipKind::Destroyer => 2,
+            ShipKind::PatrolBoat => 1,
+        }
+    }
+}
+
 impl Display for ShipKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
@@ -262,8 +274,8 @@ impl Layout {
         Ok(Layout { placements })
     }
 
-    pub fn placements(&self) -> &ShipsPlacements {
-        &self.placements
+    pub fn placements(&self) -> &HashMap<ShipKind, Placement> {
+        &self.placements.placements()
     }
 }
 
