@@ -1,54 +1,92 @@
 use crate::types::{Placement, ShipsPlacements, Who, Hits, Position, ShipKind, Orientation, Layout};
 use std::collections::HashMap;
 
-pub enum Game {
-    Pending(GamePending),
-    Layouting(GameLayouting),
-    Playing(GamePlaying)
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum GameError {
+    AlreadyHasLayout,
+    InvalidLayout,
+    NotOnTurn,
 }
 
-
-pub struct GamePending {
-    first_player: u64
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum BoardCell {
+    Empty,
+    Hit,
+    Ship(ShipKind),
 }
 
-impl GamePending {
-    pub fn new(first_player: u64) -> Self {
-        GamePending {
-            first_player
+#[derive(Debug)]
+pub struct Ship {
+    kind: ShipKind,
+    health: u8,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ShootResult {
+    Missed,
+    Hit,
+    Sunk(Placement),
+}
+
+impl Ship {
+    pub fn new(kind: ShipKind) -> Self {
+        Ship {
+            kind,
+            health: kind.cells()
         }
     }
 
-    pub fn add_second_player(self, second_player: u64) -> GameLayouting {
-        GameLayouting::new(self.first_player, second_player)
+    pub fn hit(&mut self) {
+        if self.health > 0 {
+            self.health -= 0;
+        }
+    }
+
+    pub fn kind(&self) -> ShipKind {
+        self.kind
+    }
+
+    pub fn is_sunk(&self) -> bool {
+        self.health == 0
     }
 }
 
-
-pub struct GameLayouting {
+pub struct Game {
     first_player: u64,
     second_player: u64,
     first_layout: Option<Layout>,
     second_layout: Option<Layout>,
+    first_board: [[BoardCell; 10]; 10],
+    second_board: [[BoardCell; 10]; 10],
+    first_ships: HashMap<ShipKind, Ship>,
+    second_ships: HashMap<ShipKind, Ship>,
+    on_turn: u64,
+    winner: Option<u64>,
 }
 
-impl GameLayouting {
+impl Game {
     fn new(first_player: u64, second_player: u64) -> Self {
-        GameLayouting {
+        Game {
             first_player,
             second_player,
             first_layout: None,
             second_layout: None,
+            first_board: [[BoardCell::Empty; 10]; 10],
+            second_board: [[BoardCell::Empty; 10]; 10],
+            first_ships: HashMap::new(),
+            second_ships: HashMap::new(),
+            on_turn: first_player,
+            winner: None
         }
     }
 
     pub fn set_layout(&mut self, player: u64, layout: Layout) -> Result<bool, GameError> {
-        let l = match player {
+        let (l, s, b) = match player {
             id if id == self.first_player => {
-                &mut self.first_layout
+                (&mut self.first_layout, &mut self.first_ships, &mut self.first_board)
             }
             id if id == self.second_player => {
-                &mut self.second_layout
+                (&mut self.second_layout, &mut self.second_ships, &mut self.second_board)
             }
             _ => {
                 panic!("player {} is not in this game", player)
@@ -59,59 +97,47 @@ impl GameLayouting {
             return Err(GameError::AlreadyHasLayout);
         }
 
-        if !Self::is_valid_layout(&layout) {
+        if !layout.is_valid() {
             return Err(GameError::InvalidLayout);
         }
 
         *l = Some(layout);
 
-        Ok(self.first_layout.is_some() && self.second_layout.is_some())
-    }
+        // prepare fleet
+        s.insert(ShipKind::AircraftCarrier, Ship::new(ShipKind::AircraftCarrier));
+        s.insert(ShipKind::Battleship, Ship::new(ShipKind::Battleship));
+        s.insert(ShipKind::Cruiser, Ship::new(ShipKind::Cruiser));
+        s.insert(ShipKind::Destroyer, Ship::new(ShipKind::Destroyer));
+        s.insert(ShipKind::PatrolBoat, Ship::new(ShipKind::PatrolBoat));
 
-    pub fn start(self) -> GamePlaying {
-        GamePlaying::new(
-            self.first_player,
-            self.second_player,
-            self.first_layout.unwrap(),
-            self.second_layout.unwrap())
-    }
-}
+        // mark ships on board
+        for (kind, placement) in l.as_ref().unwrap().placements().placements() {
+            let cells = kind.cells();
+            let mut row: i32 = placement.position().row() as i32;
+            let mut col: i32 = placement.position().col() as i32;
 
+            let (inc_r, inc_c) = match placement.orientation() {
+                Orientation::East => (0, 1),
+                Orientation::North => (-1, 0),
+                Orientation::West => (0, -1),
+                Orientation::South => (1, 0),
+            };
 
-pub struct GamePlaying {
-    first_player: u64,
-    second_player: u64,
-    first_layout: Layout,
-    second_layout: Layout,
-    first_board: [[bool; 10]; 10],
-    second_board: [[bool; 10]; 10],
-    first_fleet: HashMap<ShipKind, u8>,
-    second_fleet: HashMap<ShipKind, u8>,
-    on_turn: u64,
-    winner: Option<u64>,
-}
-
-impl GamePlaying {
-    fn new(first_player: u64, second_player: u64, first_layout: Layout, second_layout: Layout) -> Self {
-        let mut fleet = HashMap::new();
-        fleet.insert(ShipKind::AircraftCarrier, ShipKind::AircraftCarrier.cells());
-        fleet.insert(ShipKind::Battleship, ShipKind::Battleship.cells());
-        fleet.insert(ShipKind::Cruiser, ShipKind::Cruiser.cells());
-        fleet.insert(ShipKind::Destroyer, ShipKind::Destroyer.cells());
-        fleet.insert(ShipKind::PatrolBoat, ShipKind::PatrolBoat.cells());
-
-        GamePlaying {
-            first_player,
-            second_player,
-            first_layout,
-            second_layout,
-            first_board: [[false; 10]; 10],
-            second_board: [[false; 10]; 10],
-            first_fleet: fleet.clone(),
-            second_fleet: fleet,
-            on_turn: first_player,
-            winner: None
+            // mark ships cells
+            for i in 0..cells {
+                b[row as usize][col as usize] = BoardCell::Ship(*kind);
+            }
         }
+
+        Ok(self.ready())
+    }
+
+    fn ready(&self) -> bool {
+        self.first_layout.is_some() && self.second_layout.is_some()
+    }
+
+    fn winner(&self) -> Option<u64> {
+        self.winner
     }
 
     pub fn other_player(&self, player: u64) -> u64 {
@@ -129,12 +155,12 @@ impl GamePlaying {
     }
 
     pub fn shoot(&mut self, player: u64, position: Position) -> Result<ShootResult, GameError> {
-        let (opponent, opponent_layout, opponent_board, opponent_fleet) = match player {
+        let (opponent_layout, opponent_board, opponent_fleet) = match player {
             id if id == self.second_player => {
-                (&mut self.first_player, &mut self.first_layout, &mut self.first_board, &mut self.first_fleet)
+                (self.first_layout.as_ref().unwrap(), &mut self.first_board, &mut self.first_ships)
             }
             id if id == self.first_player => {
-                (&mut self.second_player, &mut self.second_layout, &mut self.second_board, &mut self.second_fleet)
+                (self.second_layout.as_ref().unwrap(), &mut self.second_board, &mut self.second_ships)
             }
             _ => {
                 panic!("player {} is not in this game", player)
@@ -150,68 +176,39 @@ impl GamePlaying {
         }
 
         // cell is already hit
-        if opponent_board[position.row() as usize][position.col() as usize] {
+        if let BoardCell::Hit = opponent_board[position.row() as usize][position.col() as usize] {
             return Ok(ShootResult::Hit);
         }
 
         let mut result = ShootResult::Missed;
 
         // check if any ship is hit
-        for (kind, placement) in opponent_layout.placements() {
-            let cells = kind.cells();
-            let mut row: i32 = placement.position().row() as i32;
-            let mut col: i32 = placement.position().col() as i32;
+        'outer: for r in 0..10 {
+            for c in 0..10 {
+                if let BoardCell::Ship(kind) = opponent_board[r as usize][c as usize] {
+                    if position.row() == r && position.col() == c {
+                        // ship is hit
 
-            let inc_r: i32;
-            let inc_c: i32;
+                        let ship = opponent_fleet.get_mut(&kind).unwrap();
+                        ship.hit();
+                        opponent_board[r as usize][c as usize] = BoardCell::Hit;
 
-            match placement.orientation() {
-                Orientation::East => {
-                    inc_c = 1;
-                    inc_r = 0;
-                },
-                Orientation::North => {
-                    inc_c = 0;
-                    inc_r = -1;
-                },
-                Orientation::West => {
-                    inc_c = -1;
-                    inc_r = 0;
-                },
-                Orientation::South => {
-                    inc_c = 0;
-                    inc_r = 1;
-                },
-            }
+                        if ship.is_sunk() {
+                            result = ShootResult::Sunk(opponent_layout.placements().placements().get(&kind).unwrap().clone())
+                        } else {
+                            result = ShootResult::Hit;
+                        }
 
-            for i in 0..cells {
-                if position.row() as i32 == row && position.col() as i32 == col {
-                    result = ShootResult::Hit;
-                    opponent_board[row as usize][col as usize] = true;
-
-                    let health = *opponent_fleet.get_mut(kind).unwrap();
-
-                    if health == 0 {
-                        result = ShootResult::Sunk(placement.clone());
+                        break 'outer;
                     }
-
-                    break;
                 }
-
-                row += inc_r;
-                col += inc_c;
-            }
-
-            if result != ShootResult::Missed {
-                break;
             }
         }
 
         // check whether the all opponent ships are sunk
         self.winner = Some(player);
-
-        for (kind, health) in opponent_fleet {
-            if *health != 0 {
+        for (kind, ship) in opponent_fleet {
+            if !ship.is_sunk() {
                 self.winner = None;
             }
         }
@@ -219,24 +216,57 @@ impl GamePlaying {
         Ok(result)
     }
 
-//    pub fn state(&self, player: u64) -> (Who, Hits, ShipsPlacements, Hits, ShipsPlacements) {
-//        // TODO: implement get game state
-//    }
+    pub fn state(&self, player: u64) -> (Who, Hits, Layout, Hits, ShipsPlacements) {
+        let (
+            board,
+            layout,
+            opponent_board,
+            opponent_layout,
+            opponent_ships
+        ) = match player {
+            id if id == self.second_player => {
+                (&self.second_board, self.second_layout.as_ref().unwrap(), &self.first_board, self.first_layout.as_ref().unwrap(), &self.first_ships)
+            }
+            id if id == self.first_player => {
+                (&self.first_board, self.first_layout.as_ref().unwrap(), &self.second_board, self.second_layout.as_ref().unwrap(), &self.second_ships)
+            }
+            _ => {
+                panic!("player {} is not in this game", player)
+            }
+        };
 
-    pub fn winner(self) -> Option<u64> {
-        self.winner
+        let on_turn = if player == self.on_turn {Who::You} else {Who::Opponent};
+        let hits = Self::serialize_board(board);
+        let layout = layout.clone();
+        let opponent_hits = Self::serialize_board(opponent_board);
+        let opponent_sunk_ships = Self::serialize_sunk(opponent_layout, opponent_ships);
+
+        (on_turn, hits, layout, opponent_hits, opponent_sunk_ships)
     }
-}
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum ShootResult {
-    Missed,
-    Hit,
-    Sunk(Placement),
-}
+    pub fn serialize_board(board: &[[BoardCell; 10]; 10]) -> Hits {
+        let mut hits = Vec::new();
 
-pub enum GameError {
-    AlreadyHasLayout,
-    InvalidLayout,
-    NotOnTurn,
+        for r in 0..10 {
+            for c in 0..10 {
+                if let BoardCell::Hit = board[r as usize][c as usize] {
+                    hits.push(Position::new(r, c).unwrap());
+                }
+            }
+        }
+
+        Hits::new(hits)
+    }
+
+    pub fn serialize_sunk(layout: &Layout, ships: &HashMap<ShipKind, Ship>) -> ShipsPlacements {
+        let mut placements = HashMap::new();
+
+        for (kind, ship) in ships {
+            if ship.is_sunk() {
+                placements.insert(*kind, layout.placements().placements().get(&kind).unwrap().clone());
+            }
+        }
+
+        ShipsPlacements::new(placements)
+    }
 }

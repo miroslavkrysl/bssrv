@@ -281,7 +281,7 @@ impl Layout {
         &self.placements
     }
 
-    fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         let mut board = [[false; 10]; 10];
 
         for (kind, placement) in self.placements.placements() {

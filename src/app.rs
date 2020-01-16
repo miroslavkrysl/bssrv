@@ -14,8 +14,8 @@ pub struct App {
 //    games: HashMap<usize, Game>,
     /// Sessions map indexed by peers ids.
     peers_sessions: HashMap<usize, u64>,
-    /// A pending game with only one player.
-    pending_game: Option<usize>,
+    /// A player waiting for opponent.
+    pending_player: Option<u64>,
 }
 
 impl App {
@@ -24,7 +24,7 @@ impl App {
             sessions: HashMap::new(),
 //            games: HashMap::new(),
             peers_sessions: HashMap::new(),
-            pending_game: None,
+            pending_player: None,
         }
     }
 
@@ -34,10 +34,7 @@ impl App {
             ClientMessage::RestoreSession(session_key) => return self.handle_restore_session(peer, session_key),
             ClientMessage::Login(nickname) => return self.handle_login(peer, nickname),
 //            ClientMessage::JoinGame => return self.handle_join_game(peer),
-            ClientMessage::Layout(layout) => {
-                println!("{}", layout);
-                vec![]
-            },
+//            ClientMessage::Layout(layout) => {},
 //            ClientMessage::Shoot(_) => {},
 //            ClientMessage::LeaveGame => {},
             ClientMessage::LogOut => return self.handle_logout(peer),
@@ -80,7 +77,9 @@ impl App {
                 session.update_last_active();
                 session.set_peer(Some(peer));
 
-                // TODO: game restore state + notify opponent
+                // TODO:
+                // if in game -> send game state, notify opponent
+                // if in lobby -> send lobby state
 
                 vec![Message(peer, ServerMessage::RestoreSessionOk(RestoreState::Lobby))]
             },
@@ -153,10 +152,15 @@ impl App {
 //    }
 
     fn handle_logout(&mut self, peer: usize) -> Vec<Command> {
-        // TODO: add in game handling
-
         if let Some(key) = self.peers_sessions.remove(&peer) {
+            // is logged
+
             self.sessions.remove(&key);
+
+            // TODO:
+            // if in game -> remove game -> notify opponent
+            // if in lobby -> send lobby state
+
             vec![Message(peer, ServerMessage::LogoutOk)]
         } else {
             vec![Message(peer, ServerMessage::IllegalState)]
