@@ -1,19 +1,19 @@
 pub mod proto;
 pub mod types;
 pub mod net;
-//pub mod app;
+pub mod session;
+pub mod app;
+pub mod game;
 
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use std::str::FromStr;
-use crate::net::{Server, Poller, PollEvent, PeerErrorKind, Peer};
+use crate::net::{Server, Poller, PollEvent, PeerErrorKind};
 use crate::proto::{ClientMessage, ServerMessage};
-use std::io::Error;
 use std::collections::HashSet;
 use std::ops::Div;
+use crate::app::App;
 
 
 /// A configuration values for the run_game_server function.
@@ -45,7 +45,7 @@ impl Default for Config {
         Config {
             address: SocketAddr::from_str("127.0.0.1:8191").unwrap(),
             max_players: 128,
-            peer_timeout: Duration::from_secs(5)
+            peer_timeout: Duration::from_secs(10)
         }
     }
 }
@@ -70,6 +70,7 @@ pub enum  Command {
 /// If the peer is inactive for a longer period than is configured, the peer is disconnected.
 pub fn run_game_server(config: Config) {
     let mut server = Server::new(config.address().clone()).unwrap();
+    let mut app = App::new();
     let mut poller = Poller::new(128).unwrap();
 
     // register servers listener for polling
@@ -160,13 +161,8 @@ pub fn run_game_server(config: Config) {
 
         // Handle incoming messages
         for (id, message) in incoming_messages.drain(..) {
-            println!("{}: {}", id, message);
-
-            if let ClientMessage::Alive = message {
-                commands.push(Command::Message(id, ServerMessage::AliveOk));
-            }
-
-            // TODO: app handle message
+            let mut result = app.handle_message(id, message);
+            commands.extend(result.drain(..));
         }
 
         // Handle commands from app

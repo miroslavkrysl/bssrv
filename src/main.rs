@@ -3,9 +3,8 @@ use log::LevelFilter;
 use bssrv::{run_game_server, Config};
 
 fn main() {
-    TermLogger::init(LevelFilter::Trace, simplelog::Config::default(), TerminalMode::Stderr).unwrap();
+    TermLogger::init(LevelFilter::Warn, simplelog::Config::default(), TerminalMode::Stderr).unwrap();
 
-    println!("main");
     run_game_server(Config::default());
 
 

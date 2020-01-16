@@ -87,37 +87,22 @@ impl Display for Nickname {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SessionKey {
-    session_key: String,
+    key: u64,
 }
 
 impl SessionKey {
-    pub fn new(session_key: String) -> Result<Self, DomainError> {
-        let len = session_key.chars().count();
-        if len != 32 {
-            return Err(
-                DomainError::new(
-                    DomainErrorKind::InvalidLength,
-                    format!("SessionKey must have 32 characters, but has {}.", len)));
-        }
-
-        if !session_key.chars().all(|c| c.is_alphanumeric()) {
-            return Err(
-                DomainError::new(
-                    DomainErrorKind::InvalidCharacters,
-                    String::from("SessionKey must contain only alphanumeric characters.")));
-        }
-
-        Ok(SessionKey { session_key })
+    pub fn new(key: u64) -> Self {
+        SessionKey { key }
     }
 
-    pub fn get(&self) -> &String {
-        &self.session_key
+    pub fn get(&self) -> u64 {
+        self.key
     }
 }
 
 impl Display for SessionKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.session_key)
+        write!(f, "{:0>16X}", self.key)
     }
 }
 

@@ -11,7 +11,7 @@ pub use message::ServerMessage;
 
 pub use deserialize::DeserializationError;
 pub use deserialize::DeserializationErrorKind;
-pub use deserialize::StructDeserializeError;
+pub use deserialize::StructDeserializationError;
 pub use deserialize::StructDeserializeErrorKind;
 
 pub use deserialize::Deserializer;

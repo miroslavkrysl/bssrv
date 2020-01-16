@@ -70,7 +70,7 @@ impl ServerMessage {
                 serialized.push_str("alive_ok");
             }
             ServerMessage::RestoreSessionOk(restore_state) => {
-                serialized.push_str("restore_session");
+                serialized.push_str("restore_session_ok");
                 restore_state.serialize(&mut payload);
             }
             ServerMessage::RestoreSessionFail => {
@@ -110,8 +110,8 @@ impl ServerMessage {
             ServerMessage::LeaveGameOk => {
                 serialized.push_str("leave_game_ok");
             }
-            ServerMessage::DisconnectOk => {
-                serialized.push_str("disconnect_ok");
+            ServerMessage::LogoutOk => {
+                serialized.push_str("logout_ok");
             }
             ServerMessage::Disconnect => {
                 serialized.push_str("disconnect");
@@ -159,7 +159,7 @@ impl SerializeIntoPayload for Nickname {
 
 impl SerializeIntoPayload for SessionKey {
     fn serialize(&self, payload: &mut Payload) {
-        payload.put_string(self.get().clone())
+        payload.put_string(format!("{:0>16X}", self.get()))
     }
 }
 
