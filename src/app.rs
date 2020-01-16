@@ -5,7 +5,7 @@ use crate::proto::{ClientMessage, ServerMessage};
 use crate::Command;
 use crate::Command::Message;
 use std::cell::{RefCell, RefMut};
-use log::{trace,debug,warn};
+use log::{trace,debug,warn, info};
 use crate::game::Game;
 use rand::Rng;
 
@@ -42,11 +42,13 @@ impl App {
     }
 
     pub fn handle_message(&mut self, peer_id: &usize, message: ClientMessage) -> Vec<Command> {
+        info!("Message from peer {:0>16X}: {}", peer_id, message);
+
         match message {
             ClientMessage::Alive => return self.handle_alive(&peer_id),
 //            ClientMessage::RestoreSession(session_key) => return self.handle_restore_session(&peer_id, session_key),
             ClientMessage::Login(nickname) => return self.handle_login(&peer_id, nickname),
-//            ClientMessage::JoinGame => return self.handle_join_game(&peer_id),
+            ClientMessage::JoinGame => return self.handle_join_game(&peer_id),
 //            ClientMessage::Layout(layout) => {},
 //            ClientMessage::Shoot(_) => {},
 //            ClientMessage::LeaveGame => {},
@@ -108,7 +110,7 @@ impl App {
 //
     /// Handle login command from the client.
     fn handle_login(&mut self, peer_id: &usize, nickname: Nickname) -> Vec<Command> {
-        debug!("peer {:0>16X}: logging in", peer_id);
+        debug!("peer {:0>16X} wants to login", peer_id);
         let mut commands = Vec::new();
 
         match self.peers_sessions.get(peer_id) {
@@ -135,84 +137,80 @@ impl App {
 
         commands
     }
-//
-//    /// Handle join game command from the client.
-//    fn handle_join_game(&mut self, peer: usize) -> Vec<Command> {
-//        debug!("handling joining game for peer {}", peer);
-//
-//        match self.peers_sessions.get(&peer).cloned() {
-//            Some(key) => {
-//                // is logged
-//                trace!("peer {:0>16X} is logged with session {:0>16X}", peer, key);
-//
-//                let mut session = self.sessions.get(&key).unwrap().borrow_mut();
-//
-//                match session.game() {
-//                    None => {
-//                        // not in any game
-//                        trace!("session {:0>16X} is not in any game", key);
-//
-//                        if let Some(player) = self.pending_player {
-//                            if player == key {
-//                                warn!("session {:0>16X} is already waiting for a game", key);
-//
-//                                // but is already waiting for a game
-//                                return vec![Message(peer, ServerMessage::IllegalState)];
-//                            }
-//                        }
-//
-//                        match self.pending_player {
-//                            None => {
-//                                // no pending player
-//                                trace!("no pending player - session {:0>16X} is set as pending", key);
-//
-//                                self.pending_player = Some(key);
-//
-//                                vec![Message(peer, ServerMessage::JoinGameWait)]
-//                            },
-//                            Some(opponent) => {
-//                                // a pending player is present
-//                                let game = Game::new(opponent, key);
-//                                let id = self.unique_game_id();
-//                                self.games.insert(id, game);
-//
-//                                let mut opponent = self.sessions.get(&opponent).unwrap().borrow_mut();
-//                                opponent.set_game(Some(id));
-//                                session.set_game(Some(id));
-//
-//                                trace!("a pending player is present - creating game for session {:0>16X} and {:0>16X}", key, opponent.peer().unwrap());
-//
-//                                self.pending_player = None;
-//
-//                                vec![
-//                                    Message(opponent.peer().unwrap(), ServerMessage::OpponentJoined(session.nickname().clone())),
-//                                    Message(peer, ServerMessage::JoinGameOk(opponent.nickname().clone()))
-//                                ]
-//                            },
-//                        }
-//                    },
-//                    Some(id) => {
-//                        // already in a game
-//                        warn!("session {:0>16X} is already in game {}", key, id);
-//                        vec![Message(peer, ServerMessage::IllegalState)]
-//                    },
-//                }
-//            }
-//            None => {
-//                // not logged
-//                warn!("peer {} is not logged - can't join a game", peer);
-//                vec![Message(peer, ServerMessage::IllegalState)]
-//            }
-//        }
-//    }
+
+    /// Handle join game command from the client.
+    fn handle_join_game(&mut self, peer_id: &usize) -> Vec<Command> {
+        debug!("peer {} wants to join a game", peer_id);
+        let mut commands = Vec::new();
+
+        match self.peers_sessions.get(peer_id).cloned() {
+            Some(session_key) => {
+                trace!("logged with session {:0>16X}", session_key);
+                self.sessions.get_mut(&session_key).unwrap().update_last_active();
+
+                match self.sessions_games.get(&session_key) {
+                    None => {
+                        trace!("not in any game");
+
+                        match self.pending_player {
+                            None => {
+                                trace!("no pending player - set as pending");
+
+                                self.pending_player = Some(session_key);
+
+                                commands.push(Message(*peer_id, ServerMessage::JoinGameWait))
+                            },
+                            Some(opponent_session_key) => {
+                                if opponent_session_key == session_key {
+                                    warn!("already waiting for a game");
+
+                                    commands.push(Message(*peer_id, ServerMessage::IllegalState));
+                                } else {
+                                    let game = Game::new(opponent_session_key, session_key);
+                                    let game_id = self.unique_game_id();
+                                    self.games.insert(game_id, game);
+
+                                    self.sessions_games.insert(session_key, game_id);
+                                    self.sessions_games.insert(opponent_session_key, game_id);
+
+                                    trace!("a pending player {:0>16X} is present - creating game", opponent_session_key);
+
+                                    self.pending_player = None;
+
+                                    let opponent_peer_id = self.sessions_peers.get(&opponent_session_key).unwrap();
+                                    let session = self.sessions.get(&session_key).unwrap();
+                                    let opponent = self.sessions.get(&opponent_session_key).unwrap();
+
+                                    commands.push(Message(*opponent_peer_id, ServerMessage::OpponentJoined(session.nickname().clone())));
+                                    commands.push(Message(*peer_id, ServerMessage::JoinGameOk(opponent.nickname().clone())));
+                                }
+                            },
+                        }
+                    },
+                    Some(game_id) => {
+                        // already in a game
+                        warn!("already in game {}", game_id);
+                        commands.push(Message(*peer_id, ServerMessage::IllegalState));
+                    },
+                }
+            }
+            None => {
+                // not logged
+                warn!("not logged - can't join a game");
+                commands.push(Message(*peer_id, ServerMessage::IllegalState))
+            }
+        }
+
+        return commands
+    }
 
     /// Handle logout command from the client.
     fn handle_logout(&mut self, peer_id: &usize) -> Vec<Command> {
-        debug!("peer {:0>16X}: logging out", peer_id);
+        debug!("peer {:0>16X} wants to logout", peer_id);
 
         let mut commands = Vec::new();
 
-        match self.peers_sessions.get(peer_id) {
+        match self.peers_sessions.get(peer_id).cloned() {
             None => {
                 warn!("can't log out because not logged yet");
                 commands.push(Message(*peer_id, ServerMessage::IllegalState))
@@ -226,7 +224,7 @@ impl App {
                     None => {
                         trace!("not in any game");
 
-                        if self.pending_player.is_some() && self.pending_player.as_ref().unwrap() == session_key {
+                        if let Some(player) = self.pending_player {
                             self.pending_player = None;
                             trace!("waiting for a game - removing");
                         }
@@ -261,7 +259,7 @@ impl App {
 
     /// Handle the peer socket disconnection.
     pub fn handle_offline(&mut self, peer_id: &usize) -> Vec<Command> {
-        debug!("peer {:0>16X}: switching to offline", peer_id);
+        debug!("peer {:0>16X} switching to offline", peer_id);
 
         let mut commands = Vec::new();
 
