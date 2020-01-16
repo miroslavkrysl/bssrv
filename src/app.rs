@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use crate::types::{SessionKey, Nickname, RestoreState};
 use crate::session::Session;
-use crate::game::Game;
+use crate::game::{Game, GamePending};
 use crate::proto::{ClientMessage, ServerMessage};
 use crate::Command;
 use crate::Command::Message;
 use rand::Rng;
-use std::cell::{Cell, RefCell};
-use std::borrow::BorrowMut;
+use std::cell::{RefCell};
 
 pub struct App {
     /// Sessions map indexed by session keys.
@@ -117,7 +116,7 @@ impl App {
                                 // no pending game, so create one
 
                                 let id = self.unique_game_id();
-                                self.games.insert(id, Game::new(key));
+                                self.games.insert(id, Game::Pending(GamePending::new(key)));
                                 self.pending_game = Some(id);
 
                                 vec![Message(peer, ServerMessage::JoinGameWait)]
