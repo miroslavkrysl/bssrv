@@ -65,7 +65,7 @@ pub struct Game {
 }
 
 impl Game {
-    fn new(first_player: u64, second_player: u64) -> Self {
+    pub fn new(first_player: u64, second_player: u64) -> Self {
         Game {
             first_player,
             second_player,

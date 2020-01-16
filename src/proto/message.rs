@@ -48,7 +48,7 @@ pub enum ServerMessage {
     RestoreSessionOk(RestoreState),
     RestoreSessionFail,
     LoginOk(SessionKey),
-    LoginOkFail,
+    LoginFail,
     JoinGameWait,
     JoinGameOk(Nickname),
     LayoutOk,
@@ -81,7 +81,7 @@ impl Display for ServerMessage {
                 write!(f, "[restore session fail]"),
             ServerMessage::LoginOk(session_key) =>
                 write!(f, "[login ok: {}]", session_key),
-            ServerMessage::LoginOkFail =>
+            ServerMessage::LoginFail =>
                 write!(f, "[login fail]"),
             ServerMessage::JoinGameWait =>
                 write!(f, "[join game wait]"),

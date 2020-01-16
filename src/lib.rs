@@ -70,7 +70,7 @@ pub enum  Command {
 /// If the peer is inactive for a longer period than is configured, the peer is disconnected.
 pub fn run_game_server(config: Config) {
     let mut server = Server::new(config.address().clone()).unwrap();
-    let mut app = App::new();
+    let mut app = App::new(config.max_players());
     let mut poller = Poller::new(128).unwrap();
 
     // register servers listener for polling

@@ -80,7 +80,7 @@ impl ServerMessage {
                 serialized.push_str("login_ok");
                 session_key.serialize(&mut payload);
             }
-            ServerMessage::LoginOkFail => {
+            ServerMessage::LoginFail => {
                 serialized.push_str("login_fail");
             }
             ServerMessage::JoinGameWait => {
