@@ -140,12 +140,12 @@ impl Game {
         self.winner
     }
 
-    pub fn other_player(&self, player: u64) -> u64 {
+    pub fn other_player(&self, player: &u64) -> u64 {
         match player {
-            id if id == self.first_player => {
+            id if *id == self.first_player => {
                 self.second_player
             }
-            id if id == self.second_player => {
+            id if *id == self.second_player => {
                 self.first_player
             }
             _ => {

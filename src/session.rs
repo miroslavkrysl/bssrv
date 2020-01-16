@@ -1,5 +1,6 @@
 use std::time::Instant;
 use crate::types::Nickname;
+use std::fmt::{Display, Formatter, Error};
 
 pub struct Session {
     key: u64,
@@ -28,16 +29,20 @@ impl Session {
         &self.nickname
     }
 
-    pub fn peer(&self) -> Option<usize> {
-        self.peer
+    pub fn key(&self) -> &u64 {
+        &self.key
+    }
+
+    pub fn peer(&self) -> Option<&usize> {
+        self.peer.as_ref()
     }
 
     pub fn set_peer(&mut self, id: Option<usize>) {
         self.peer = id
     }
 
-    pub fn game(&self) -> Option<usize> {
-        self.game
+    pub fn game(&self) -> Option<&usize> {
+        self.game.as_ref()
     }
 
     pub fn set_game(&mut self, id: Option<usize>) {
