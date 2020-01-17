@@ -46,7 +46,7 @@ impl App {
 
         match message {
             ClientMessage::Alive => return self.handle_alive(&peer_id),
-//            ClientMessage::RestoreSession(session_key) => return self.handle_restore_session(&peer_id, session_key),
+            ClientMessage::RestoreSession(session_key) => return self.handle_restore_session(&peer_id, session_key),
             ClientMessage::Login(nickname) => return self.handle_login(&peer_id, nickname),
             ClientMessage::JoinGame => return self.handle_join_game(&peer_id),
 //            ClientMessage::Layout(layout) => {},
@@ -67,47 +67,84 @@ impl App {
             },
             Some(session_key) => {
                 trace!("with session {:0>16X}", session_key);
-                let mut session = self.sessions.get_mut(&session_key).unwrap().update_last_active();
+                self.sessions.get_mut(&session_key).unwrap().update_last_active();
             },
         }
 
         vec![Message(*peer_id, ServerMessage::AliveOk)]
     }
 
-//    fn handle_restore_session(&mut self, peer: usize, key: SessionKey) -> Vec<Command> {
-//        if self.peers_sessions.contains_key(&peer) {
-//            // already logged
-//            return vec![Message(peer, ServerMessage::IllegalState)];
-//        }
-//
-//        match self.sessions.get(&key.get()) {
-//            None => {
-//                // no session of given key found
-//                vec![Message(peer, ServerMessage::RestoreSessionFail)]
-//            },
-//            Some(session) => {
-//                // a session found
-//
-//                let mut session = session.borrow_mut();
-//
-//                if let None = session.peer() {
-//                    // session already active
-//
-//                    return vec![Message(peer, ServerMessage::RestoreSessionFail)];
-//                }
-//
-//                session.update_last_active();
-//                session.set_peer(Some(peer));
-//
-//                // TODO:
-//                // if in game -> send game state, notify opponent
-//                // if in lobby -> send lobby state
-//
-//                vec![Message(peer, ServerMessage::RestoreSessionOk(RestoreState::Lobby))]
-//            },
-//        }
-//    }
-//
+    fn handle_restore_session(&mut self, peer_id: &usize, session_key: SessionKey) -> Vec<Command> {
+        debug!("peer {:0>16X} wants to restore session", peer_id);
+        let mut commands = Vec::new();
+
+        match self.peers_sessions.get(peer_id) {
+            None => {
+                let session_key = session_key.get();
+
+                match self.sessions.get_mut(&session_key) {
+                    Some(session) => {
+                        trace!("session with key {:0>16X} found", session_key);
+
+                        if let None = self.sessions_peers.get(&session_key) {
+                            warn!("session is already online");
+                            commands.push(Message(*peer_id, ServerMessage::RestoreSessionFail));
+                        }
+
+                        session.update_last_active();
+                        self.sessions_peers.insert(session_key, *peer_id);
+                        self.peers_sessions.insert(*peer_id, session_key);
+
+                        match self.sessions_games.get(&session_key) {
+                            None => {
+                                trace!("not in any game");
+                                commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Lobby)));
+                            },
+                            Some(game_id) => {
+                                trace!("in game {:0>16X} - notifying opponent", game_id);
+
+                                let game = self.games.get(game_id).unwrap();
+                                let opponent_session_key = &game.other_player(&session_key);
+
+                                if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                                    commands.push(Message(*opponent_peer_id, ServerMessage::OpponentLeft))
+                                }
+
+                                let (
+                                    on_turn,
+                                    player_board,
+                                    layout,
+                                    opponent_board,
+                                    sunk_ships
+                                ) = game.state(session_key);
+
+                                commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Game {
+                                    on_turn,
+                                    player_board,
+                                    layout,
+                                    opponent_board,
+                                    sunk_ships
+                                })));
+                            },
+                        }
+                    },
+                    None => {
+                        warn!("no session with key {:0>16X}", session_key);
+                        commands.push(Message(*peer_id, ServerMessage::RestoreSessionFail));
+                    }
+                }
+            },
+            Some(session_key) => {
+                warn!("already logged with session {:0>16X}", session_key);
+
+                self.sessions.get_mut(&session_key).unwrap().update_last_active();
+                commands.push(Message(*peer_id, ServerMessage::IllegalState));
+            },
+        }
+
+        commands
+    }
+
     /// Handle login command from the client.
     fn handle_login(&mut self, peer_id: &usize, nickname: Nickname) -> Vec<Command> {
         debug!("peer {:0>16X} wants to login", peer_id);
@@ -202,6 +239,7 @@ impl App {
         return commands
     }
 
+    /// Handle the leave game command from client
     fn handle_leave_game(&mut self, peer_id: &usize) -> Vec<Command> {
         debug!("peer {} wants to leave the game", peer_id);
         let mut commands = Vec::new();
@@ -236,7 +274,7 @@ impl App {
                     Some(game_id) => {
                         trace!("in game {} - removing game and notifying opponent", game_id);
 
-                        let game = self.games.get(game_id).unwrap();
+                        let game = self.games.remove(game_id).unwrap();
                         let opponent_session_key = &game.other_player(&session_key);
 
                         self.sessions_games.remove(&session_key);
@@ -279,8 +317,10 @@ impl App {
                         trace!("not in any game");
 
                         if let Some(player) = self.pending_player {
-                            self.pending_player = None;
-                            trace!("waiting for a game - removing");
+                            if player == session_key {
+                                trace!("waiting for a game - removing");
+                                self.pending_player = None;
+                            }
                         }
                     },
                     Some(game_id) => {
@@ -315,7 +355,7 @@ impl App {
 
         let mut commands = Vec::new();
 
-        match self.peers_sessions.get(&peer_id) {
+        match self.peers_sessions.get(&peer_id).cloned() {
             None => {
                 trace!("no session");
             },
@@ -323,12 +363,12 @@ impl App {
                 trace!("session {:0>16X}", session_key);
 
                 // handle if the session is in any game
-                match self.sessions_games.get(&session_key) {
+                match self.sessions_games.get(&session_key).cloned() {
                     None => {
                         trace!("not in any game");
 
                         if let Some(player) = self.pending_player {
-                            if player == *session_key {
+                            if player == session_key {
                                 trace!("waiting for a game - removing");
                                 self.pending_player = None;
                             }
@@ -338,10 +378,22 @@ impl App {
                         let game = self.games.get(&game_id).unwrap();
                         let opponent_session_key = game.other_player(&session_key);
 
-                        trace!("in a game {:0>16X} - notifying opponent {:0>16X}", game_id, &opponent_session_key);
+                        if !game.playing() {
+                            trace!("in the non-started game {:0>16X} - removing game and notifying opponent {:0>16X}", game_id, &opponent_session_key);
 
-                        if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
-                            commands.push(Message(*opponent_peer_id, ServerMessage::OpponentOffline))
+                            self.sessions_games.remove(&session_key);
+                            self.sessions_games.remove(&opponent_session_key);
+                            self.games.remove(&game_id);
+
+                            if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentLeft))
+                            }
+                        } else {
+                            trace!("in the game {:0>16X} - notifying opponent {:0>16X}", game_id, &opponent_session_key);
+
+                            if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentOffline))
+                            }
                         }
                     },
                 }

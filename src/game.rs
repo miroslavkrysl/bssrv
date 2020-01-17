@@ -129,14 +129,14 @@ impl Game {
             }
         }
 
-        Ok(self.ready())
+        Ok(self.playing())
     }
 
-    fn ready(&self) -> bool {
+    pub fn playing(&self) -> bool {
         self.first_layout.is_some() && self.second_layout.is_some()
     }
 
-    fn winner(&self) -> Option<u64> {
+    pub fn winner(&self) -> Option<u64> {
         self.winner
     }
 
