@@ -242,14 +242,21 @@ impl SerializeIntoPayload for ShipsPlacements {
 impl SerializeIntoPayload for RestoreState {
     fn serialize(&self, payload: &mut Payload) {
         match self {
-            RestoreState::Lobby => payload.put_string(String::from("lobby")),
+            RestoreState::Lobby(nickname) => {
+                payload.put_string(String::from("lobby"));
+                nickname.serialize(payload);
+            },
             RestoreState::Game {
+                nickname,
+                opponent,
                 on_turn,
                 player_board,
                 layout,
                 opponent_board,
                 sunk_ships
             } => {
+                nickname.serialize(payload);
+                opponent.serialize(payload);
                 payload.put_string(String::from("game"));
                 on_turn.serialize(payload);
                 player_board.serialize(payload);

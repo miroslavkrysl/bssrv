@@ -484,8 +484,10 @@ impl Display for Hits {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum RestoreState {
-    Lobby,
+    Lobby(Nickname),
     Game {
+        nickname: Nickname,
+        opponent: Nickname,
         on_turn: Who,
         player_board: Hits,
         layout: Layout,
@@ -497,14 +499,16 @@ pub enum RestoreState {
 impl Display for RestoreState {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            RestoreState::Lobby => write!(f, "lobby"),
+            RestoreState::Lobby(nickname) => write!(f, "lobby {}", nickname),
             RestoreState::Game {
+                nickname,
+                opponent,
                 on_turn,
                 player_board,
                 layout,
                 opponent_board,
                 sunk_ships
-            } => write!(f, "game ({}, {}, {}, {}, {})", on_turn, player_board, layout, opponent_board, sunk_ships)
+            } => write!(f, "game ({}, {}, {}, {}, {}, {}, {})", nickname, opponent, on_turn, player_board, layout, opponent_board, sunk_ships)
         }
     }
 }

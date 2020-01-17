@@ -95,16 +95,19 @@ impl App {
                             self.sessions_peers.insert(session_key, *peer_id);
                             self.peers_sessions.insert(*peer_id, session_key);
 
+                            let session = self.sessions.get(&session_key).unwrap();
+
                             match self.sessions_games.get(&session_key) {
                                 None => {
                                     trace!("not in any game");
-                                    commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Lobby)));
+                                    commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Lobby(session.nickname().clone()))));
                                 }
                                 Some(game_id) => {
                                     trace!("in game {:0>16X} - notifying opponent", game_id);
 
                                     let game = self.games.get(game_id).unwrap();
                                     let opponent_session_key = &game.other_player(&session_key);
+                                    let opponent_session = self.sessions.get(opponent_session_key).unwrap();
 
                                     if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
                                         commands.push(Message(*opponent_peer_id, ServerMessage::OpponentReady))
@@ -119,6 +122,8 @@ impl App {
                                     ) = game.state(session_key);
 
                                     commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Game {
+                                        nickname: session.nickname().clone(),
+                                        opponent: opponent_session.nickname().clone(),
                                         on_turn,
                                         player_board,
                                         layout,
