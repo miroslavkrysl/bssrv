@@ -15,6 +15,7 @@ use crate::proto::{ServerMessage};
 use std::collections::HashSet;
 use std::ops::Div;
 use crate::app::App;
+use log::{debug, trace, info, warn, error};
 
 
 /// A configuration values for the run_game_server function.
@@ -149,7 +150,8 @@ pub fn run_game_server(config: Config) {
             let peer = server.remove_peer(&id).unwrap();
             poller.deregister_peer(&peer, &id).unwrap();
 
-            app.handle_offline(&id);
+            let mut result = app.handle_offline(&id);
+            commands.extend(result.drain(..));
         }
 
         // Handle new peers
@@ -175,6 +177,8 @@ pub fn run_game_server(config: Config) {
                     let peer = server.peer_mut(&id).unwrap();
                     peer.add_message(&message);
                     reregister_peers.insert(id);
+
+                    debug!("sending message to {:0>16X}={}", id, peer.address());
                 },
                 Command::Close(id) => {
                     // force close on peer

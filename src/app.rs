@@ -51,7 +51,7 @@ impl App {
             ClientMessage::JoinGame => return self.handle_join_game(&peer_id),
 //            ClientMessage::Layout(layout) => {},
 //            ClientMessage::Shoot(_) => {},
-//            ClientMessage::LeaveGame => {},
+            ClientMessage::LeaveGame => return self.handle_leave_game(&peer_id),
             ClientMessage::LogOut => return self.handle_logout(&peer_id),
             _ => return vec![]
         }
@@ -188,14 +188,69 @@ impl App {
                         }
                     },
                     Some(game_id) => {
-                        // already in a game
                         warn!("already in game {}", game_id);
                         commands.push(Message(*peer_id, ServerMessage::IllegalState));
                     },
                 }
             }
             None => {
-                // not logged
+                warn!("not logged - can't join a game");
+                commands.push(Message(*peer_id, ServerMessage::IllegalState))
+            }
+        }
+
+        return commands
+    }
+
+    fn handle_leave_game(&mut self, peer_id: &usize) -> Vec<Command> {
+        debug!("peer {} wants to leave the game", peer_id);
+        let mut commands = Vec::new();
+
+        match self.peers_sessions.get(peer_id).cloned() {
+            Some(session_key) => {
+                trace!("logged with session {:0>16X}", session_key);
+                self.sessions.get_mut(&session_key).unwrap().update_last_active();
+
+                match self.sessions_games.get(&session_key) {
+                    None => {
+                        trace!("not in game");
+
+                        match self.pending_player {
+                            None => {
+                                trace!("not waiting for a game");
+                                warn!("can't leave - not in any a game");
+
+                                commands.push(Message(*peer_id, ServerMessage::IllegalState))
+                            },
+                            Some(pending_session_key) => {
+                                if pending_session_key == session_key {
+                                    trace!("waiting for a game - removing");
+
+                                    self.pending_player = None;
+
+                                    commands.push(Message(*peer_id, ServerMessage::LeaveGameOk));
+                                }
+                            },
+                        }
+                    },
+                    Some(game_id) => {
+                        trace!("in game {} - removing game and notifying opponent", game_id);
+
+                        let game = self.games.get(game_id).unwrap();
+                        let opponent_session_key = &game.other_player(&session_key);
+
+                        self.sessions_games.remove(&session_key);
+                        self.sessions_games.remove(opponent_session_key);
+
+                        if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                            commands.push(Message(*opponent_peer_id, ServerMessage::OpponentLeft))
+                        }
+
+                        commands.push(Message(*peer_id, ServerMessage::LeaveGameOk));
+                    },
+                }
+            }
+            None => {
                 warn!("not logged - can't join a game");
                 commands.push(Message(*peer_id, ServerMessage::IllegalState))
             }
@@ -217,7 +272,6 @@ impl App {
             },
             Some(session_key) => {
                 trace!("session {:0>16X}", session_key);
-                let session = self.sessions.get(&session_key);
 
                 // handle if the session is in any game
                 match self.sessions_games.get(&session_key) {
@@ -231,16 +285,14 @@ impl App {
                     },
                     Some(game_id) => {
                         let game = self.games.remove(&game_id).unwrap();
-                        let opponent_id = game.other_player(&session_key);
+                        let opponent_session_key = game.other_player(&session_key);
 
-                        let opponent = self.sessions.get(&opponent_id).unwrap();
-
-                        trace!("in a game {:0>16X} - removing and notifying opponent {}", game_id, opponent_id);
+                        trace!("in a game {:0>16X} - removing and notifying opponent {}", game_id, opponent_session_key);
 
                         self.sessions_games.remove(&session_key);
-                        self.sessions_games.remove(&opponent_id);
+                        self.sessions_games.remove(&opponent_session_key);
 
-                        if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_id) {
+                        if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
                             commands.push(Message(*opponent_peer_id, ServerMessage::OpponentLeft))
                         }
                     },
@@ -283,7 +335,7 @@ impl App {
                         }
                     },
                     Some(game_id) => {
-                        let game = self.games.remove(&game_id).unwrap();
+                        let game = self.games.get(&game_id).unwrap();
                         let opponent_session_key = game.other_player(&session_key);
 
                         trace!("in a game {:0>16X} - notifying opponent {:0>16X}", game_id, &opponent_session_key);
