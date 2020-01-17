@@ -4,7 +4,6 @@ pub mod net;
 pub mod session;
 pub mod app;
 pub mod game;
-pub mod storage;
 
 
 use std::net::SocketAddr;

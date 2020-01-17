@@ -1,12 +1,12 @@
 use std::collections::HashMap;
-use crate::types::{SessionKey, Nickname, RestoreState};
+use crate::types::{SessionKey, Nickname, RestoreState, Layout};
 use crate::session::Session;
 use crate::proto::{ClientMessage, ServerMessage};
 use crate::Command;
 use crate::Command::Message;
 use std::cell::{RefCell, RefMut};
 use log::{trace,debug,warn, info};
-use crate::game::Game;
+use crate::game::{Game, GameError};
 use rand::Rng;
 
 pub struct App {
@@ -49,8 +49,8 @@ impl App {
             ClientMessage::RestoreSession(session_key) => return self.handle_restore_session(&peer_id, session_key),
             ClientMessage::Login(nickname) => return self.handle_login(&peer_id, nickname),
             ClientMessage::JoinGame => return self.handle_join_game(&peer_id),
-//            ClientMessage::Layout(layout) => {},
-//            ClientMessage::Shoot(_) => {},
+            ClientMessage::Layout(layout) => return self.handle_layout(&peer_id, layout),
+//            ClientMessage::Shoot(position) => return self.handle_shoot(&peer_id, position),
             ClientMessage::LeaveGame => return self.handle_leave_game(&peer_id),
             ClientMessage::LogOut => return self.handle_logout(&peer_id),
             _ => return vec![]
@@ -74,6 +74,7 @@ impl App {
         vec![Message(*peer_id, ServerMessage::AliveOk)]
     }
 
+    /// Handle the restore session command from client.
     fn handle_restore_session(&mut self, peer_id: &usize, session_key: SessionKey) -> Vec<Command> {
         debug!("peer {:0>16X} wants to restore session", peer_id);
         let mut commands = Vec::new();
@@ -86,46 +87,46 @@ impl App {
                     Some(session) => {
                         trace!("session with key {:0>16X} found", session_key);
 
-                        if let None = self.sessions_peers.get(&session_key) {
-                            warn!("session is already online");
+                        if let Some(id) = self.sessions_peers.get(&session_key) {
+                            warn!("session is already online with peer {:0>16X}", id);
                             commands.push(Message(*peer_id, ServerMessage::RestoreSessionFail));
-                        }
+                        } else {
+                            session.update_last_active();
+                            self.sessions_peers.insert(session_key, *peer_id);
+                            self.peers_sessions.insert(*peer_id, session_key);
 
-                        session.update_last_active();
-                        self.sessions_peers.insert(session_key, *peer_id);
-                        self.peers_sessions.insert(*peer_id, session_key);
+                            match self.sessions_games.get(&session_key) {
+                                None => {
+                                    trace!("not in any game");
+                                    commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Lobby)));
+                                },
+                                Some(game_id) => {
+                                    trace!("in game {:0>16X} - notifying opponent", game_id);
 
-                        match self.sessions_games.get(&session_key) {
-                            None => {
-                                trace!("not in any game");
-                                commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Lobby)));
-                            },
-                            Some(game_id) => {
-                                trace!("in game {:0>16X} - notifying opponent", game_id);
+                                    let game = self.games.get(game_id).unwrap();
+                                    let opponent_session_key = &game.other_player(&session_key);
 
-                                let game = self.games.get(game_id).unwrap();
-                                let opponent_session_key = &game.other_player(&session_key);
+                                    if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                                        commands.push(Message(*opponent_peer_id, ServerMessage::OpponentReady))
+                                    }
 
-                                if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
-                                    commands.push(Message(*opponent_peer_id, ServerMessage::OpponentLeft))
-                                }
+                                    let (
+                                        on_turn,
+                                        player_board,
+                                        layout,
+                                        opponent_board,
+                                        sunk_ships
+                                    ) = game.state(session_key);
 
-                                let (
-                                    on_turn,
-                                    player_board,
-                                    layout,
-                                    opponent_board,
-                                    sunk_ships
-                                ) = game.state(session_key);
-
-                                commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Game {
-                                    on_turn,
-                                    player_board,
-                                    layout,
-                                    opponent_board,
-                                    sunk_ships
-                                })));
-                            },
+                                    commands.push(Message(*peer_id, ServerMessage::RestoreSessionOk(RestoreState::Game {
+                                        on_turn,
+                                        player_board,
+                                        layout,
+                                        opponent_board,
+                                        sunk_ships
+                                    })));
+                                },
+                            }
                         }
                     },
                     None => {
@@ -232,6 +233,67 @@ impl App {
             }
             None => {
                 warn!("not logged - can't join a game");
+                commands.push(Message(*peer_id, ServerMessage::IllegalState))
+            }
+        }
+
+        return commands
+    }
+
+    /// Handle the layout command from client
+    fn handle_layout(&mut self, peer_id: &usize, layout: Layout) -> Vec<Command> {
+        debug!("peer {} wants to choose a game layout", peer_id);
+        let mut commands = Vec::new();
+
+        match self.peers_sessions.get(peer_id).cloned() {
+            Some(session_key) => {
+                trace!("logged with session {:0>16X}", session_key);
+                self.sessions.get_mut(&session_key).unwrap().update_last_active();
+
+                match self.sessions_games.get(&session_key) {
+                    None => {
+                        trace!("not in game");
+                        commands.push(Message(*peer_id, ServerMessage::IllegalState))
+                    },
+                    Some(game_id) => {
+                        trace!("in game {}", game_id);
+
+                        let game = self.games.get_mut(game_id).unwrap();
+
+                        if game.playing() {
+                            warn!("already playing - can't choose layout");
+                            commands.push(Message(*peer_id, ServerMessage::IllegalState))
+                        } else {
+                            match game.set_layout(session_key, layout) {
+                                Ok(_) => {
+                                    trace!("layout set");
+
+                                    let opponent_session_key = game.other_player(&session_key);
+                                    let opponent_peer_id = self.sessions_peers.get(&opponent_session_key).unwrap();
+
+                                    commands.push(Message(*peer_id, ServerMessage::LayoutOk));
+                                    commands.push(Message(*opponent_peer_id, ServerMessage::OpponentReady));
+                                },
+                                Err(error) => {
+                                    match error {
+                                        GameError::AlreadyHasLayout => {
+                                            warn!("already has a layout");
+                                            commands.push(Message(*peer_id, ServerMessage::IllegalState))
+                                        },
+                                        GameError::InvalidLayout => {
+                                            warn!("layout is invalid");
+                                            commands.push(Message(*peer_id, ServerMessage::LayoutFail))
+                                        },
+                                        _ => {},
+                                    }
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+            None => {
+                warn!("not logged - can't choose layout");
                 commands.push(Message(*peer_id, ServerMessage::IllegalState))
             }
         }
