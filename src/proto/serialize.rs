@@ -1,5 +1,5 @@
 use crate::proto::ServerMessage;
-use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload, escape, MESSAGE_END, ESCAPE};
+use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload, escape, MESSAGE_END, ESCAPE, PAYLOAD_START};
 use crate::types::{Nickname, SessionKey, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
 use std::convert::TryInto;
 use log::{info, trace, debug};
@@ -143,7 +143,7 @@ impl ServerMessage {
         }
 
         if let Some(ref serialized_payload) = payload.serialize() {
-            serialized.push(PAYLOAD_ITEM_SEPARATOR);
+            serialized.push(PAYLOAD_START);
             serialized.push_str(serialized_payload);
         }
 
@@ -172,11 +172,11 @@ impl SerializeIntoPayload for SessionKey {
 impl SerializeIntoPayload for ShipKind {
     fn serialize(&self, payload: &mut Payload) {
         match self {
-            ShipKind::AircraftCarrier => payload.put_string(String::from("AC")),
+            ShipKind::AircraftCarrier => payload.put_string(String::from("A")),
             ShipKind::Battleship => payload.put_string(String::from("B")),
             ShipKind::Cruiser => payload.put_string(String::from("C")),
             ShipKind::Destroyer => payload.put_string(String::from("D")),
-            ShipKind::PatrolBoat => payload.put_string(String::from("PB")),
+            ShipKind::PatrolBoat => payload.put_string(String::from("P")),
         }
     }
 }

@@ -357,11 +357,11 @@ impl DeserializeFromPayload for ShipKind {
         }
 
         match string.unwrap().as_str() {
-            "AC" => Ok(ShipKind::AircraftCarrier),
+            "A" => Ok(ShipKind::AircraftCarrier),
             "B" => Ok(ShipKind::Battleship),
             "C" => Ok(ShipKind::Cruiser),
             "D" => Ok(ShipKind::Destroyer),
-            "PB" => Ok(ShipKind::PatrolBoat),
+            "P" => Ok(ShipKind::PatrolBoat),
             _ => Err(
                 StructDeserializationError::new(
                     StructDeserializeErrorKind::ShipKind,
