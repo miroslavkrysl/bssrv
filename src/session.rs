@@ -1,6 +1,5 @@
 use std::time::Instant;
 use crate::types::Nickname;
-use std::fmt::{Display, Formatter, Error};
 
 pub struct Session {
     nickname: Nickname,
@@ -17,6 +16,10 @@ impl Session {
 
     pub fn update_last_active(&mut self) {
         self.last_active = Instant::now()
+    }
+
+    pub fn last_active(&self) -> &Instant {
+        &self.last_active
     }
 
     pub fn nickname(&self) -> &Nickname {

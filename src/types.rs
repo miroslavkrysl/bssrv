@@ -2,7 +2,6 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use std::collections::HashMap;
-use std::ops::AddAssign;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum DomainErrorKind {

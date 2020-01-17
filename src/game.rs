@@ -124,7 +124,7 @@ impl Game {
             };
 
             // mark ships cells
-            for i in 0..cells {
+            for _ in 0..cells {
                 b[row as usize][col as usize] = BoardCell::Ship(*kind);
 
                 row += inc_r;
@@ -170,7 +170,7 @@ impl Game {
             }
         };
 
-        if let Some(winner) = self.winner {
+        if let Some(_) = self.winner {
             panic!("game is over");
         }
 
@@ -217,7 +217,7 @@ impl Game {
 
         // check whether the all opponent ships are sunk
         self.winner = Some(player);
-        for (kind, ship) in opponent_fleet {
+        for (_, ship) in opponent_fleet {
             if !ship.is_sunk() {
                 self.winner = None;
             }

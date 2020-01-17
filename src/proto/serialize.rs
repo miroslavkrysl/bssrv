@@ -3,7 +3,6 @@ use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload, escape, MESSAGE_END, 
 use crate::types::{Nickname, SessionKey, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
 use std::convert::TryInto;
 use log::{info, trace, debug};
-use std::collections::VecDeque;
 
 // ---Stream serialize---
 

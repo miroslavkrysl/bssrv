@@ -12,16 +12,19 @@ use std::str::FromStr;
 use crate::net::{Server, Poller, PollEvent, PeerErrorKind};
 use crate::proto::{ServerMessage};
 use std::collections::HashSet;
-use std::ops::Div;
 use crate::app::App;
 use log::{debug, trace, info, warn, error};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::io;
 
 
 /// A configuration values for the run_game_server function.
 pub struct Config {
     address: SocketAddr,
     max_players: usize,
-    peer_timeout: Duration
+    peer_timeout: Duration,
+    session_timeout: Duration
 }
 
 impl Config {
@@ -39,6 +42,11 @@ impl Config {
     pub fn peer_timeout(&self) -> &Duration {
         &self.peer_timeout
     }
+
+    /// Get the time after a session is removed if not active.
+    pub fn session_timeout(&self) -> &Duration {
+        &self.session_timeout
+    }
 }
 
 impl Default for Config {
@@ -46,7 +54,8 @@ impl Default for Config {
         Config {
             address: SocketAddr::from_str("127.0.0.1:8191").unwrap(),
             max_players: 128,
-            peer_timeout: Duration::from_secs(120)
+            peer_timeout: Duration::from_secs(10),
+            session_timeout: Duration::from_secs(60)
         }
     }
 }
@@ -69,16 +78,15 @@ pub enum  Command {
 /// actions for the server are returned back and than processed too.
 ///
 /// If the peer is inactive for a longer period than is configured, the peer is disconnected.
-pub fn run_game_server(config: Config) {
+pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<()>{
     let mut server = Server::new(config.address().clone()).unwrap();
-    let mut app = App::new(config.max_players());
+    let mut app = App::new(config.max_players(), config.session_timeout().clone());
     let mut poller = Poller::new(128).unwrap();
 
     // register servers listener for polling
-    poller.register_listener(server.listener(), 0).unwrap();
+    poller.register_listener(server.listener(), 0)?;
 
     let peer_timeout = config.peer_timeout;
-    let poll_timeout = peer_timeout.div(2);
 
     let mut events = Vec::new();
     let mut new_peers = HashSet::new();
@@ -87,13 +95,15 @@ pub fn run_game_server(config: Config) {
     let mut commands: Vec<Command> = Vec::new();
     let mut reregister_peers = HashSet::new();
 
+    let mut end = false;
+
     loop {
-        poller.poll(&mut events, Some(poll_timeout)).unwrap();
+        poller.poll(&mut events, Some(Duration::from_secs(1)))?;
 
         for event in events.drain(..) {
             match event {
                 PollEvent::Accept(_) => {
-                    let peer = server.listener().accept_peer().unwrap();
+                    let peer = server.listener().accept_peer()?;
                     let id = server.add_peer(peer);
                     new_peers.insert(id);
                 },
@@ -111,7 +121,7 @@ pub fn run_game_server(config: Config) {
                                 PeerErrorKind::Closed => {
                                     // TODO: print closed
                                 },
-                                PeerErrorKind::Deserialization(e) => {
+                                PeerErrorKind::Deserialization(error) => {
                                     // TODO: print error
                                 },
                             }
@@ -134,9 +144,18 @@ pub fn run_game_server(config: Config) {
             }
         }
 
-        let now = Instant::now();
+        if end {
+            break;
+        }
+
+        // Handle new peers
+        for id in new_peers.drain() {
+            let peer = server.peer(&id).unwrap();
+            poller.register_peer(&peer, id)?;
+        }
 
         // Handle timeouts
+        let now = Instant::now();
         for (id, peer) in server.peers() {
             if now.duration_since(peer.last_active()) >= peer_timeout {
                 closed_peers.insert(id.clone());
@@ -147,18 +166,10 @@ pub fn run_game_server(config: Config) {
         // Handle closed peers
         for id in closed_peers.drain() {
             let peer = server.remove_peer(&id).unwrap();
-            poller.deregister_peer(&peer, &id).unwrap();
+            poller.deregister_peer(&peer, &id)?;
 
             let mut result = app.handle_offline(&id);
             commands.extend(result.drain(..));
-        }
-
-        // Handle new peers
-        for id in new_peers.drain() {
-            let peer = server.peer(&id).unwrap();
-            poller.register_peer(&peer, id).unwrap();
-
-            // TODO: app handle new peers
         }
 
         // Handle incoming messages
@@ -167,32 +178,46 @@ pub fn run_game_server(config: Config) {
             commands.extend(result.drain(..));
         }
 
+        // Do a cleanup.
+        commands.extend(app.handle_cleanup());
+
+
+        // if shutdown - handle shutdown
+        end = shutdown.load(Ordering::SeqCst);
+        if end {
+            commands.extend(app.handle_shutdown());
+        }
+
         // Handle commands from app
         for command in commands.drain(..) {
             match command {
                 Command::Message(id, message) => {
                     // outgoing message
 
-                    let peer = server.peer_mut(&id).unwrap();
-                    peer.add_message(&message);
-                    reregister_peers.insert(id);
+                    if let Some(peer) = server.peer_mut(&id) {
+                        peer.add_message(&message);
+                        reregister_peers.insert(id);
 
-                    debug!("sending message to {:0>16X}={}", id, peer.address());
+                        debug!("sending message to {:0>16X} = {}: {}", id, peer.address(), message);
+                    }
                 },
                 Command::Close(id) => {
                     // force close on peer
 
                     let peer = server.remove_peer(&id).unwrap();
                     peer.close();
-                    poller.deregister_peer(&peer, &id).unwrap();
+                    poller.deregister_peer(&peer, &id)?;
                 },
             }
         }
 
         // Reregister peers if needed.
         for id in reregister_peers.drain() {
-            let peer = server.peer(&id).unwrap();
-            poller.reregister_peer(peer, &id).unwrap();
+            if let Some(peer) = server.peer(&id) {
+                poller.reregister_peer(peer, &id)?;
+            }
         }
     }
+
+    Ok(())
 }

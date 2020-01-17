@@ -1,5 +1,3 @@
-use crate::proto::{ClientMessage, ServerMessage};
-
 mod peer;
 mod listener;
 mod server;

@@ -101,7 +101,7 @@ impl Peer {
                     // interrupted, try again
                     continue;
                 }
-                Err(error) => {
+                Err(_) => {
                     // fatal error
                     return Err(PeerErrorKind::Closed.into());
                 }

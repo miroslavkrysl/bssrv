@@ -1,13 +1,13 @@
 //! Client messages deserialization logic
 
-use crate::types::{SessionKey, Nickname, Layout, Position, Placement, Orientation, DomainErrorKind, ShipsPlacements, ShipKind};
-use crate::proto::{ClientMessage, ServerMessage};
+use crate::types::{SessionKey, Nickname, Layout, Position, Placement, Orientation, ShipsPlacements, ShipKind};
+use crate::proto::{ClientMessage};
 use crate::proto::codec::{find, Payload, PAYLOAD_START, ESCAPE, MESSAGE_END, MAX_MESSAGE_LENGTH, unescape};
 use std::fmt::{Display, Formatter};
 use std::fmt;
 use std::error::Error;
 use std::num::ParseIntError;
-use std::collections::{HashMap, LinkedList};
+use std::collections::{HashMap};
 use log::{trace, error, info, debug, warn};
 
 
