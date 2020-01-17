@@ -1,7 +1,7 @@
 //! Battleships protocol message types,
 //! And payload container.
 
-use crate::types::{SessionKey, Nickname, Layout, Position, RestoreState, ShipKind, Who};
+use crate::types::{SessionKey, Nickname, Layout, Position, RestoreState, ShipKind, Who, Placement};
 use std::fmt::{Formatter, Display};
 use std::fmt;
 
@@ -55,7 +55,7 @@ pub enum ServerMessage {
     LayoutFail,
     ShootHit,
     ShootMissed,
-    ShootSunk(ShipKind, Position),
+    ShootSunk(ShipKind, Placement),
     LeaveGameOk,
     LogoutOk,
     Disconnect,

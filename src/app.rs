@@ -1,19 +1,17 @@
 use std::collections::HashMap;
-use crate::types::{SessionKey, Nickname, RestoreState, Layout};
+use crate::types::{SessionKey, Nickname, RestoreState, Layout, Position, Who};
 use crate::session::Session;
 use crate::proto::{ClientMessage, ServerMessage};
 use crate::Command;
 use crate::Command::Message;
 use std::cell::{RefCell, RefMut};
 use log::{trace,debug,warn, info};
-use crate::game::{Game, GameError};
+use crate::game::{Game, GameError, ShootResult};
 use rand::Rng;
 
 pub struct App {
     /// Limit of maximum players.
     max_players: usize,
-//    /// Sessions map indexed by session keys.
-//    storage: Storage,
     /// A player waiting for opponent.
     pending_player: Option<u64>,
     /// Sessions storage indexed by session keys.
@@ -50,7 +48,7 @@ impl App {
             ClientMessage::Login(nickname) => return self.handle_login(&peer_id, nickname),
             ClientMessage::JoinGame => return self.handle_join_game(&peer_id),
             ClientMessage::Layout(layout) => return self.handle_layout(&peer_id, layout),
-//            ClientMessage::Shoot(position) => return self.handle_shoot(&peer_id, position),
+            ClientMessage::Shoot(position) => return self.handle_shoot(&peer_id, position),
             ClientMessage::LeaveGame => return self.handle_leave_game(&peer_id),
             ClientMessage::LogOut => return self.handle_logout(&peer_id),
             _ => return vec![]
@@ -149,6 +147,7 @@ impl App {
     /// Handle login command from the client.
     fn handle_login(&mut self, peer_id: &usize, nickname: Nickname) -> Vec<Command> {
         debug!("peer {:0>16X} wants to login", peer_id);
+        trace!("nickname: {}", nickname);
         let mut commands = Vec::new();
 
         match self.peers_sessions.get(peer_id) {
@@ -243,6 +242,7 @@ impl App {
     /// Handle the layout command from client
     fn handle_layout(&mut self, peer_id: &usize, layout: Layout) -> Vec<Command> {
         debug!("peer {} wants to choose a game layout", peer_id);
+        trace!("layout: {}", layout);
         let mut commands = Vec::new();
 
         match self.peers_sessions.get(peer_id).cloned() {
@@ -286,6 +286,106 @@ impl App {
                                         },
                                         _ => {},
                                     }
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+            None => {
+                warn!("not logged - can't choose layout");
+                commands.push(Message(*peer_id, ServerMessage::IllegalState))
+            }
+        }
+
+        return commands
+    }
+
+    /// Handle the shoot command from client
+    fn handle_shoot(&mut self, peer_id: &usize, position: Position) -> Vec<Command> {
+        debug!("peer {} wants to shoot", peer_id);
+        trace!("position: {}", position);
+
+        let mut commands = Vec::new();
+
+        match self.peers_sessions.get(peer_id).cloned() {
+            Some(session_key) => {
+                trace!("logged with session {:0>16X}", session_key);
+                self.sessions.get_mut(&session_key).unwrap().update_last_active();
+
+                match self.sessions_games.get(&session_key) {
+                    None => {
+                        trace!("not in game");
+                        commands.push(Message(*peer_id, ServerMessage::IllegalState))
+                    },
+                    Some(game_id) => {
+                        trace!("in game {}", game_id);
+
+                        let game = self.games.get_mut(game_id).unwrap();
+
+                        if !game.playing() {
+                            warn!("not playing - can't shoot");
+                            commands.push(Message(*peer_id, ServerMessage::IllegalState))
+                        } else {
+                            match game.shoot(session_key, position) {
+                                Ok(result) => {
+                                    let opponent_session_key = game.other_player(&session_key);
+
+                                    match result {
+                                        ShootResult::Missed => {
+                                            trace!("missed");
+
+                                            commands.push(Message(*peer_id, ServerMessage::ShootMissed));
+                                            if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentMissed(position)));
+                                            }
+                                        },
+                                        ShootResult::Hit => {
+                                            trace!("hit");
+
+                                            commands.push(Message(*peer_id, ServerMessage::ShootHit));
+                                            if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentHit(position)));
+                                            }
+
+                                        },
+                                        ShootResult::Sunk(ship_kind, placement) => {
+                                            trace!("sunk a ship");
+
+                                            commands.push(Message(*peer_id, ServerMessage::ShootSunk(ship_kind, placement)));
+                                            if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentHit(position)));
+                                            }
+                                        },
+                                    }
+
+                                    if let Some(winner) = game.winner() {
+                                        trace!("game over, winner: {:0>16X}", winner);
+
+                                        commands.push(Message(
+                                            *peer_id,
+                                            ServerMessage::GameOver(
+                                                if winner == session_key {Who::You} else {Who::Opponent}
+                                            )));
+
+                                        if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_session_key) {
+                                            commands.push(Message(
+                                                *opponent_peer_id,
+                                                ServerMessage::GameOver(
+                                                    if winner == opponent_session_key {Who::You} else {Who::Opponent}
+                                                )));
+                                        }
+
+                                        trace!("removing the game {:0>16X}", game_id);
+
+                                        self.games.remove(game_id);
+                                        self.sessions_games.remove(&session_key);
+                                        self.sessions_games.remove(&opponent_session_key);
+                                    }
+                                },
+                                Err(_) => {
+                                    warn!("not on turn");
+                                    commands.push(Message(*peer_id, ServerMessage::IllegalState))
                                 }
                             }
                         }
@@ -389,7 +489,7 @@ impl App {
                         let game = self.games.remove(&game_id).unwrap();
                         let opponent_session_key = game.other_player(&session_key);
 
-                        trace!("in a game {:0>16X} - removing and notifying opponent {}", game_id, opponent_session_key);
+                        trace!("in a game {:0>16X} - removing game and notifying opponent {}", game_id, opponent_session_key);
 
                         self.sessions_games.remove(&session_key);
                         self.sessions_games.remove(&opponent_session_key);
@@ -464,6 +564,14 @@ impl App {
                 self.peers_sessions.remove(&peer_id);
             },
         }
+
+        commands
+    }
+
+    /// Do clean up of inactive sessions.
+    pub fn handle_cleanup(&mut self, peer_id: &usize) -> Vec<Command> {
+        // TODO: implement cleanup
+        let commands = Vec::new();
 
         commands
     }

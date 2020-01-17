@@ -25,7 +25,7 @@ pub struct Ship {
 pub enum ShootResult {
     Missed,
     Hit,
-    Sunk(Placement),
+    Sunk(ShipKind, Placement),
 }
 
 impl Ship {
@@ -38,7 +38,7 @@ impl Ship {
 
     pub fn hit(&mut self) {
         if self.health > 0 {
-            self.health -= 0;
+            self.health -= 1;
         }
     }
 
@@ -126,6 +126,9 @@ impl Game {
             // mark ships cells
             for i in 0..cells {
                 b[row as usize][col as usize] = BoardCell::Ship(*kind);
+
+                row += inc_r;
+                col += inc_c;
             }
         }
 
@@ -155,12 +158,12 @@ impl Game {
     }
 
     pub fn shoot(&mut self, player: u64, position: Position) -> Result<ShootResult, GameError> {
-        let (opponent_layout, opponent_board, opponent_fleet) = match player {
+        let (opponent, opponent_layout, opponent_board, opponent_fleet) = match player {
             id if id == self.second_player => {
-                (self.first_layout.as_ref().unwrap(), &mut self.first_board, &mut self.first_ships)
+                (self.first_player, self.first_layout.as_ref().unwrap(), &mut self.first_board, &mut self.first_ships)
             }
             id if id == self.first_player => {
-                (self.second_layout.as_ref().unwrap(), &mut self.second_board, &mut self.second_ships)
+                (self.second_player, self.second_layout.as_ref().unwrap(), &mut self.second_board, &mut self.second_ships)
             }
             _ => {
                 panic!("player {} is not in this game", player)
@@ -181,6 +184,7 @@ impl Game {
         }
 
         let mut result = ShootResult::Missed;
+        self.on_turn = opponent;
 
         // check if any ship is hit
         'outer: for r in 0..10 {
@@ -189,13 +193,19 @@ impl Game {
                     if position.row() == r && position.col() == c {
                         // ship is hit
 
+                        self.on_turn = player;
+
                         let ship = opponent_fleet.get_mut(&kind).unwrap();
                         ship.hit();
                         opponent_board[r as usize][c as usize] = BoardCell::Hit;
 
                         if ship.is_sunk() {
-                            result = ShootResult::Sunk(opponent_layout.placements().placements().get(&kind).unwrap().clone())
+                            println!("{}", ship.is_sunk());
+                            println!("{}", ship.health);
+                            result = ShootResult::Sunk(kind, opponent_layout.placements().placements().get(&kind).unwrap().clone())
                         } else {
+                            println!("{}", ship.is_sunk());
+                            println!("{}", ship.health);
                             result = ShootResult::Hit;
                         }
 
