@@ -1,6 +1,6 @@
 use crate::proto::ServerMessage;
 use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload, escape, MESSAGE_END, ESCAPE, PAYLOAD_START};
-use crate::types::{Nickname, SessionKey, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
+use crate::types::{Nickname, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
 use std::convert::TryInto;
 use log::{info, trace, debug};
 
@@ -68,19 +68,18 @@ impl ServerMessage {
             ServerMessage::AliveOk => {
                 serialized.push_str("alive_ok");
             }
-            ServerMessage::RestoreSessionOk(restore_state) => {
-                serialized.push_str("restore_session_ok");
+            ServerMessage::LoginOk => {
+                serialized.push_str("login_ok");
+            }
+            ServerMessage::LoginRestored(restore_state) => {
+                serialized.push_str("login_restored");
                 restore_state.serialize(&mut payload);
             }
-            ServerMessage::RestoreSessionFail => {
-                serialized.push_str("restore_session_fail");
+            ServerMessage::LoginFull => {
+                serialized.push_str("login_full");
             }
-            ServerMessage::LoginOk(session_key) => {
-                serialized.push_str("login_ok");
-                session_key.serialize(&mut payload);
-            }
-            ServerMessage::LoginFail => {
-                serialized.push_str("login_fail");
+            ServerMessage::LoginTaken => {
+                serialized.push_str("login_taken");
             }
             ServerMessage::JoinGameWait => {
                 serialized.push_str("join_game_wait");
@@ -163,12 +162,6 @@ impl SerializeIntoPayload for Nickname {
     }
 }
 
-impl SerializeIntoPayload for SessionKey {
-    fn serialize(&self, payload: &mut Payload) {
-        payload.put_string(format!("{:0>16X}", self.get()))
-    }
-}
-
 impl SerializeIntoPayload for ShipKind {
     fn serialize(&self, payload: &mut Payload) {
         match self {
@@ -242,12 +235,10 @@ impl SerializeIntoPayload for ShipsPlacements {
 impl SerializeIntoPayload for RestoreState {
     fn serialize(&self, payload: &mut Payload) {
         match self {
-            RestoreState::Lobby(nickname) => {
+            RestoreState::Lobby => {
                 payload.put_string(String::from("lobby"));
-                nickname.serialize(payload);
             },
             RestoreState::Game {
-                nickname,
                 opponent,
                 on_turn,
                 player_board,
@@ -255,7 +246,6 @@ impl SerializeIntoPayload for RestoreState {
                 opponent_board,
                 sunk_ships
             } => {
-                nickname.serialize(payload);
                 opponent.serialize(payload);
                 payload.put_string(String::from("game"));
                 on_turn.serialize(payload);

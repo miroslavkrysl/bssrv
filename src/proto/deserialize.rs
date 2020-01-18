@@ -1,6 +1,6 @@
 //! Client messages deserialization logic
 
-use crate::types::{SessionKey, Nickname, Layout, Position, Placement, Orientation, ShipsPlacements, ShipKind};
+use crate::types::{Nickname, Layout, Position, Placement, Orientation, ShipsPlacements, ShipKind};
 use crate::proto::{ClientMessage};
 use crate::proto::codec::{find, Payload, PAYLOAD_START, ESCAPE, MESSAGE_END, MAX_MESSAGE_LENGTH, unescape};
 use std::fmt::{Display, Formatter};
@@ -149,10 +149,6 @@ impl ClientMessage {
 
         match header {
             "alive" => Ok(ClientMessage::Alive),
-            "restore_session" => {
-                let session_key = SessionKey::deserialize(&mut payload)?;
-                Ok(ClientMessage::RestoreSession(session_key))
-            },
             "login" => {
                 let nickname = Nickname::deserialize(&mut payload)?;
                 Ok(ClientMessage::Login(nickname))
@@ -177,29 +173,6 @@ impl ClientMessage {
 trait DeserializeFromPayload: Sized {
     /// Deserialize self from message payload.
     fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError>;
-}
-
-impl DeserializeFromPayload for SessionKey {
-    fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
-        let string = payload.take_string();
-
-        if let Err(error) = string {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::SessionKey, error.into()).into())
-        }
-
-        let key = u64::from_str_radix(&string.unwrap(), 16);
-
-        if let Err(error) = key {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::SessionKey,
-                    DeserializationError::new(DeserializationErrorKind::ParseInt(error)).into()).into())
-        }
-
-        Ok(SessionKey::new(key.unwrap()))
-    }
 }
 
 impl DeserializeFromPayload for Nickname {
@@ -446,7 +419,6 @@ impl Error for DeserializationError {}
 /// Describes the kind of the struct deserialization error.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum StructDeserializeErrorKind {
-    SessionKey,
     Nickname,
     ShipKind,
     Position,
@@ -459,8 +431,6 @@ pub enum StructDeserializeErrorKind {
 impl Display for StructDeserializeErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            StructDeserializeErrorKind::SessionKey =>
-                write!(f, "SessionKey can't be properly deserialized"),
             StructDeserializeErrorKind::Nickname =>
                 write!(f, "Nickname can't be properly deserialized"),
             StructDeserializeErrorKind::ShipKind =>

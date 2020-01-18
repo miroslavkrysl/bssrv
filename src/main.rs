@@ -6,9 +6,6 @@ use std::sync::Arc;
 use log::error;
 
 fn main() {
-
-    println!("{:0>16X}", 18446744073709551612u64);
-
     let logger_config = simplelog::ConfigBuilder::new()
         .add_filter_allow(format!("{}", "bssrv"))
         .build();

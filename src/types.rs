@@ -85,29 +85,6 @@ impl Display for Nickname {
 }
 
 
-// ---SessionKey---
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct SessionKey {
-    key: u64,
-}
-
-impl SessionKey {
-    pub fn new(key: u64) -> Self {
-        SessionKey { key }
-    }
-
-    pub fn get(&self) -> u64 {
-        self.key
-    }
-}
-
-impl Display for SessionKey {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{:0>16X}", self.key)
-    }
-}
-
 // ---ShipKind---
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -484,9 +461,8 @@ impl Display for Hits {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum RestoreState {
-    Lobby(Nickname),
+    Lobby,
     Game {
-        nickname: Nickname,
         opponent: Nickname,
         on_turn: Who,
         player_board: Hits,
@@ -499,16 +475,15 @@ pub enum RestoreState {
 impl Display for RestoreState {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            RestoreState::Lobby(nickname) => write!(f, "lobby {}", nickname),
+            RestoreState::Lobby => write!(f, "lobby"),
             RestoreState::Game {
-                nickname,
                 opponent,
                 on_turn,
                 player_board,
                 layout,
                 opponent_board,
                 sunk_ships
-            } => write!(f, "game ({}, {}, {}, {}, {}, {}, {})", nickname, opponent, on_turn, player_board, layout, opponent_board, sunk_ships)
+            } => write!(f, "game ({}, {}, {}, {}, {}, {})", opponent, on_turn, player_board, layout, opponent_board, sunk_ships)
         }
     }
 }

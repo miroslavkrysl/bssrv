@@ -52,20 +52,20 @@ impl Ship {
 }
 
 pub struct Game {
-    first_player: u64,
-    second_player: u64,
+    first_player: usize,
+    second_player: usize,
     first_layout: Option<Layout>,
     second_layout: Option<Layout>,
     first_board: [[BoardCell; 10]; 10],
     second_board: [[BoardCell; 10]; 10],
     first_ships: HashMap<ShipKind, Ship>,
     second_ships: HashMap<ShipKind, Ship>,
-    on_turn: u64,
-    winner: Option<u64>,
+    on_turn: usize,
+    winner: Option<usize>,
 }
 
 impl Game {
-    pub fn new(first_player: u64, second_player: u64) -> Self {
+    pub fn new(first_player: usize, second_player: usize) -> Self {
         Game {
             first_player,
             second_player,
@@ -80,7 +80,7 @@ impl Game {
         }
     }
 
-    pub fn set_layout(&mut self, player: u64, layout: Layout) -> Result<bool, GameError> {
+    pub fn set_layout(&mut self, player: usize, layout: Layout) -> Result<bool, GameError> {
         let (l, s, b) = match player {
             id if id == self.first_player => {
                 (&mut self.first_layout, &mut self.first_ships, &mut self.first_board)
@@ -139,11 +139,11 @@ impl Game {
         self.first_layout.is_some() && self.second_layout.is_some()
     }
 
-    pub fn winner(&self) -> Option<u64> {
+    pub fn winner(&self) -> Option<usize> {
         self.winner
     }
 
-    pub fn other_player(&self, player: &u64) -> u64 {
+    pub fn other_player(&self, player: &usize) -> usize {
         match player {
             id if *id == self.first_player => {
                 self.second_player
@@ -157,7 +157,7 @@ impl Game {
         }
     }
 
-    pub fn shoot(&mut self, player: u64, position: Position) -> Result<ShootResult, GameError> {
+    pub fn shoot(&mut self, player: usize, position: Position) -> Result<ShootResult, GameError> {
         let (opponent, opponent_layout, opponent_board, opponent_fleet) = match player {
             id if id == self.second_player => {
                 (self.first_player, self.first_layout.as_ref().unwrap(), &mut self.first_board, &mut self.first_ships)
@@ -226,7 +226,7 @@ impl Game {
         Ok(result)
     }
 
-    pub fn state(&self, player: u64) -> (Who, Hits, Layout, Hits, ShipsPlacements) {
+    pub fn state(&self, player: usize) -> (Who, Hits, Layout, Hits, ShipsPlacements) {
         let (
             board,
             layout,

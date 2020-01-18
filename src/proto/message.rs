@@ -1,15 +1,15 @@
 //! Battleships protocol message types,
 //! And payload container.
 
-use crate::types::{SessionKey, Nickname, Layout, Position, RestoreState, ShipKind, Who, Placement};
+use crate::types::{Nickname, Layout, Position, RestoreState, ShipKind, Who, Placement};
 use std::fmt::{Formatter, Display};
 use std::fmt;
+use std::panic::resume_unwind;
 
 /// A message received from a client.
 #[derive(Debug, Clone)]
 pub enum ClientMessage {
     Alive,
-    RestoreSession(SessionKey),
     Login(Nickname),
     JoinGame,
     Layout(Layout),
@@ -23,8 +23,6 @@ impl Display for ClientMessage {
         match self {
             ClientMessage::Alive =>
                 write!(f, "[alive]"),
-            ClientMessage::RestoreSession(session_key) =>
-                write!(f, "[restore session: {}]", session_key),
             ClientMessage::Login(nickname) =>
                 write!(f, "[login: {}]", nickname),
             ClientMessage::JoinGame =>
@@ -45,10 +43,10 @@ impl Display for ClientMessage {
 pub enum ServerMessage {
     IllegalState,
     AliveOk,
-    RestoreSessionOk(RestoreState),
-    RestoreSessionFail,
-    LoginOk(SessionKey),
-    LoginFail,
+    LoginOk,
+    LoginRestored(RestoreState),
+    LoginFull,
+    LoginTaken,
     JoinGameWait,
     JoinGameOk(Nickname),
     LayoutOk,
@@ -75,14 +73,14 @@ impl Display for ServerMessage {
                 write!(f, "[illegal state]"),
             ServerMessage::AliveOk =>
                 write!(f, "[alive ok]"),
-            ServerMessage::RestoreSessionOk(restore_state) =>
-                write!(f, "[restore session ok: {}]", restore_state),
-            ServerMessage::RestoreSessionFail =>
-                write!(f, "[restore session fail]"),
-            ServerMessage::LoginOk(session_key) =>
-                write!(f, "[login ok: {}]", session_key),
-            ServerMessage::LoginFail =>
-                write!(f, "[login fail]"),
+            ServerMessage::LoginOk =>
+                write!(f, "[login ok]"),
+            ServerMessage::LoginRestored(restore_state) =>
+                write!(f, "[login restored: {}]", restore_state),
+            ServerMessage::LoginFull =>
+                write!(f, "[login full]"),
+            ServerMessage::LoginTaken =>
+                write!(f, "[login taken]"),
             ServerMessage::JoinGameWait =>
                 write!(f, "[join game wait]"),
             ServerMessage::JoinGameOk(opponent) =>

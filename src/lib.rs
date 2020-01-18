@@ -1,7 +1,6 @@
 pub mod proto;
 pub mod types;
 pub mod net;
-pub mod session;
 pub mod app;
 pub mod game;
 
@@ -182,7 +181,7 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
         commands.extend(app.handle_cleanup());
 
 
-        // if shutdown - handle shutdown
+        // If shutdown - handle shutdown
         end = shutdown.load(Ordering::SeqCst);
         if end {
             commands.extend(app.handle_shutdown());
