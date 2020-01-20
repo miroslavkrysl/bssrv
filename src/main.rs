@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use log::error;
 use clap::{App, Arg};
-use std::net::{SocketAddr, IpAddr, AddrParseError};
+use std::net::{SocketAddr, IpAddr};
 use std::str::FromStr;
 
 fn main() {

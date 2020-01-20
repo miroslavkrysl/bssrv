@@ -1,6 +1,7 @@
 use crate::types::{Placement, ShipsPlacements, Who, Hits, Position, ShipKind, Orientation, Layout};
 use std::collections::HashMap;
 
+/// An error indicating that player did something illegal with the game.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum GameError {
     AlreadyHasLayout,
@@ -8,6 +9,7 @@ pub enum GameError {
     NotOnTurn,
 }
 
+/// A state of the one board cell.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BoardCell {
     Empty,
@@ -16,12 +18,14 @@ pub enum BoardCell {
     Ship(ShipKind),
 }
 
+/// Ship of particular kind and health.
 #[derive(Debug)]
 pub struct Ship {
     kind: ShipKind,
     health: u8,
 }
 
+/// The result of shooting.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ShootResult {
     Missed,
@@ -30,6 +34,8 @@ pub enum ShootResult {
 }
 
 impl Ship {
+    /// Create a new ship of the given kind.
+    /// Sets the ships health to the correct value according to the kind.
     pub fn new(kind: ShipKind) -> Self {
         Ship {
             kind,
@@ -37,21 +43,25 @@ impl Ship {
         }
     }
 
+    /// Decrease the ships health by one if not already zero.
     pub fn hit(&mut self) {
         if self.health > 0 {
             self.health -= 1;
         }
     }
 
+    /// Get the kind of the ship
     pub fn kind(&self) -> ShipKind {
         self.kind
     }
 
+    /// Check whether is the ship sunk (health == 0).
     pub fn is_sunk(&self) -> bool {
         self.health == 0
     }
 }
 
+/// A game of two players.
 pub struct Game {
     first_player: usize,
     second_player: usize,
@@ -66,6 +76,8 @@ pub struct Game {
 }
 
 impl Game {
+
+    /// Create a new game with the two players.
     pub fn new(first_player: usize, second_player: usize) -> Self {
         Game {
             first_player,
@@ -81,6 +93,7 @@ impl Game {
         }
     }
 
+    /// Set the ships layout for the player.
     pub fn set_layout(&mut self, player: usize, layout: Layout) -> Result<bool, GameError> {
         let (l, s, b) = match player {
             id if id == self.first_player => {
@@ -136,14 +149,17 @@ impl Game {
         Ok(self.playing())
     }
 
+    /// Check if the both ship layouts are set and the game is in progress.
     pub fn playing(&self) -> bool {
         self.first_layout.is_some() && self.second_layout.is_some()
     }
 
+    /// Get the game winner if the game has ended.
     pub fn winner(&self) -> Option<usize> {
         self.winner
     }
 
+    /// Get the other player in the game.
     pub fn other_player(&self, player: &usize) -> usize {
         match player {
             id if *id == self.first_player => {
@@ -158,6 +174,7 @@ impl Game {
         }
     }
 
+    /// Shoot at position and get the result.
     pub fn shoot(&mut self, player: usize, position: Position) -> Result<ShootResult, GameError> {
         let (opponent, opponent_layout, opponent_board, opponent_fleet) = match player {
             id if id == self.second_player => {
@@ -229,6 +246,7 @@ impl Game {
         Ok(result)
     }
 
+    /// Get the state of game for a concrete player.
     pub fn state(&self, player: usize) -> (Who, Hits, Hits, Layout, Hits, Hits, ShipsPlacements) {
         let (
             board,
@@ -259,6 +277,7 @@ impl Game {
         (on_turn, player_hits, player_misses, layout, opponent_hits, opponent_misses, opponent_sunk_ships)
     }
 
+    /// Serialize all board cells which are hit into the Hits structure.
     pub fn serialize_hits(board: &[[BoardCell; 10]; 10]) -> Hits {
         let mut hits = Vec::new();
 
@@ -273,6 +292,7 @@ impl Game {
         Hits::new(hits)
     }
 
+    /// Serialize all board cells which are missed into the Hits structure.
     pub fn serialize_misses(board: &[[BoardCell; 10]; 10]) -> Hits {
         let mut hits = Vec::new();
 
@@ -287,6 +307,7 @@ impl Game {
         Hits::new(hits)
     }
 
+    /// Serialize all ships which are sunk into a ShipsPlacements structure.
     pub fn serialize_sunk(layout: &Layout, ships: &HashMap<ShipKind, Ship>) -> ShipsPlacements {
         let mut placements = HashMap::new();
 

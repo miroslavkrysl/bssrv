@@ -108,6 +108,11 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
 
     let mut end = false;
 
+    info!("starting the server on address: {}", config.address());
+    info!("maximum number of players: {}", config.max_players());
+    info!("sessions timeout: {} seconds", config.session_timeout().as_secs());
+    info!("connection timeout: {} seconds", config.peer_timeout().as_secs());
+
     // polling loop
     loop {
         poller.poll(&mut events, Some(Duration::from_secs(1)))?;
@@ -116,8 +121,12 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
             match event {
                 PollEvent::Accept(_) => {
                     let peer = server.listener().accept_peer()?;
+                    let address = peer.address().clone();
+
                     let id = server.add_peer(peer);
                     new_peers.insert(id);
+
+                    debug!("new connection {} accepted from {}", id, address);
                 },
                 PollEvent::Read(id) => {
                     let peer = server.peer_mut(&id).unwrap();
@@ -125,16 +134,17 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
                     match peer.do_read() {
                         Ok(messages) => {
                             for message in messages {
+                                debug!("incoming message from {:0>16X}: {}", id, message);
                                 incoming_messages.push((id, message));
                             }
                         },
                         Err(error) => {
                             match error.kind() {
                                 PeerErrorKind::Closed => {
-                                    // TODO: print closed
+                                    debug!("connection {:0>16X} closed", id);
                                 },
                                 PeerErrorKind::Deserialization(error) => {
-                                    warn!("error: {}", error);
+                                    error!("error in message stream: {}", error);
                                 },
                             }
                             closed_peers.insert(id);
@@ -170,6 +180,8 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
         let now = Instant::now();
         for (id, peer) in server.peers() {
             if now.duration_since(peer.last_active()) >= peer_timeout {
+                warn!("peer {:0>16X} is inactive for too long - closing", id);
+
                 closed_peers.insert(id.clone());
                 peer.close();
             }
@@ -197,6 +209,7 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
         // If shutdown - handle shutdown
         end = shutdown.load(Ordering::SeqCst);
         if end {
+            info!("shutdown requested");
             commands.extend(app.handle_shutdown());
         }
 
@@ -207,10 +220,9 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
                     // outgoing message
 
                     if let Some(peer) = server.peer_mut(&id) {
+                        debug!("outgoing message to {:0>16X}: {}", id, message);
                         peer.add_message(&message);
                         reregister_peers.insert(id);
-
-//                        info!("sending message to {:0>16X} = {}: {}", id, peer.address(), message);
                     }
                 },
                 Command::Close(id) => {
@@ -231,5 +243,6 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
         }
     }
 
+    info!("server terminated");
     Ok(())
 }
