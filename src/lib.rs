@@ -48,10 +48,22 @@ impl Config {
     }
 }
 
+impl Config {
+    /// Create a new server config.
+    pub fn new(address: SocketAddr, max_players: usize) -> Self {
+        Config {
+            address,
+            max_players,
+            peer_timeout: Duration::from_secs(5),
+            session_timeout: Duration::from_secs(300)
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
-            address: SocketAddr::from_str("127.0.0.1:8191").unwrap(),
+            address: SocketAddr::from_str("0.0.0.0:10000").unwrap(),
             max_players: 128,
             peer_timeout: Duration::from_secs(10),
             session_timeout: Duration::from_secs(60)
@@ -96,6 +108,7 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
 
     let mut end = false;
 
+    // polling loop
     loop {
         poller.poll(&mut events, Some(Duration::from_secs(1)))?;
 
