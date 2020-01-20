@@ -465,9 +465,11 @@ pub enum RestoreState {
     Game {
         opponent: Nickname,
         on_turn: Who,
-        player_board: Hits,
+        player_board_hits: Hits,
+        player_board_misses: Hits,
         layout: Layout,
-        opponent_board: Hits,
+        opponent_board_hits: Hits,
+        opponent_board_misses: Hits,
         sunk_ships: ShipsPlacements
     }
 }
@@ -479,11 +481,21 @@ impl Display for RestoreState {
             RestoreState::Game {
                 opponent,
                 on_turn,
-                player_board,
+                player_board_hits,
+                player_board_misses,
                 layout,
-                opponent_board,
+                opponent_board_hits,
+                opponent_board_misses,
                 sunk_ships
-            } => write!(f, "game ({}, {}, {}, {}, {}, {})", opponent, on_turn, player_board, layout, opponent_board, sunk_ships)
+            } => write!(f, "game ({}, {}, {}, {}, {}, {}, {}, {})",
+                        opponent,
+                        on_turn,
+                        player_board_hits,
+                        player_board_misses,
+                        layout,
+                        opponent_board_hits,
+                        opponent_board_misses,
+                        sunk_ships)
         }
     }
 }

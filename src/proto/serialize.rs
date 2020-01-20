@@ -1,8 +1,7 @@
 use crate::proto::ServerMessage;
-use crate::proto::codec::{PAYLOAD_ITEM_SEPARATOR, Payload, escape, MESSAGE_END, ESCAPE, PAYLOAD_START};
+use crate::proto::codec::{Payload, escape, MESSAGE_END, ESCAPE, PAYLOAD_START};
 use crate::types::{Nickname, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
 use std::convert::TryInto;
-use log::{info, trace, debug};
 
 // ---Stream serialize---
 
@@ -241,17 +240,21 @@ impl SerializeIntoPayload for RestoreState {
             RestoreState::Game {
                 opponent,
                 on_turn,
-                player_board,
+                player_board_hits,
+                player_board_misses,
                 layout,
-                opponent_board,
+                opponent_board_hits,
+                opponent_board_misses,
                 sunk_ships
             } => {
-                opponent.serialize(payload);
                 payload.put_string(String::from("game"));
+                opponent.serialize(payload);
                 on_turn.serialize(payload);
-                player_board.serialize(payload);
+                player_board_hits.serialize(payload);
+                player_board_misses.serialize(payload);
                 layout.serialize(payload);
-                opponent_board.serialize(payload);
+                opponent_board_hits.serialize(payload);
+                opponent_board_misses.serialize(payload);
                 sunk_ships.serialize(payload);
             },
         };

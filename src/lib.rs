@@ -78,9 +78,9 @@ pub enum  Command {
 ///
 /// If the peer is inactive for a longer period than is configured, the peer is disconnected.
 pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<()>{
-    let mut server = Server::new(config.address().clone()).unwrap();
+    let mut server = Server::new(config.address().clone())?;
     let mut app = App::new(config.max_players(), config.session_timeout().clone());
-    let mut poller = Poller::new(128).unwrap();
+    let mut poller = Poller::new(128)?;
 
     // register servers listener for polling
     poller.register_listener(server.listener(), 0)?;
@@ -121,7 +121,7 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
                                     // TODO: print closed
                                 },
                                 PeerErrorKind::Deserialization(error) => {
-                                    // TODO: print error
+                                    warn!("error: {}", error);
                                 },
                             }
                             closed_peers.insert(id);
@@ -197,7 +197,7 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
                         peer.add_message(&message);
                         reregister_peers.insert(id);
 
-                        debug!("sending message to {:0>16X} = {}: {}", id, peer.address(), message);
+//                        info!("sending message to {:0>16X} = {}: {}", id, peer.address(), message);
                     }
                 },
                 Command::Close(id) => {

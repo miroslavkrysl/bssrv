@@ -8,7 +8,6 @@ use std::fmt;
 use std::error::Error;
 use std::num::ParseIntError;
 use std::collections::{HashMap};
-use log::{trace, error, info, debug, warn};
 
 
 // ---Stream deserialize---

@@ -9,7 +9,7 @@ fn main() {
     let logger_config = simplelog::ConfigBuilder::new()
         .add_filter_allow(format!("{}", "bssrv"))
         .build();
-    TermLogger::init(LevelFilter::Trace, logger_config, TerminalMode::Stdout).unwrap();
+    TermLogger::init(LevelFilter::Info, logger_config, TerminalMode::Stdout).unwrap();
 
     let shutdown = Arc::new(AtomicBool::new(false));
 

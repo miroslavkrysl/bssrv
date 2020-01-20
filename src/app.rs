@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use crate::types::{Nickname, RestoreState, Layout, Position, Who};
 use crate::proto::{ClientMessage, ServerMessage};
 use crate::Command;
-use crate::Command::{Message, Close};
+use crate::Command::{Message};
 use log::{trace, debug, warn, info};
 use crate::game::{Game, GameError, ShootResult};
 use rand::Rng;
@@ -48,7 +48,7 @@ impl App {
     }
 
     pub fn handle_message(&mut self, peer_id: &usize, message: ClientMessage) -> Vec<Command> {
-        info!("Message from peer {:0>16X}: {}", peer_id, message);
+//        info!("Message from peer {:0>16X}: {}", peer_id, message);
 
         match message {
             ClientMessage::Alive => self.handle_alive(&peer_id),
@@ -142,18 +142,22 @@ impl App {
 
                                     let (
                                         on_turn,
-                                        player_board,
+                                        player_board_hits,
+                                        player_board_misses,
                                         layout,
-                                        opponent_board,
+                                        opponent_board_hits,
+                                        opponent_board_misses,
                                         sunk_ships
                                     ) = game.state(*player_id);
 
                                     commands.push(Message(*peer_id, ServerMessage::LoginRestored(RestoreState::Game {
                                         opponent: Nickname::new(opponent_nickname.clone()).unwrap(),
                                         on_turn,
-                                        player_board,
+                                        player_board_hits,
+                                        player_board_misses,
                                         layout,
-                                        opponent_board,
+                                        opponent_board_hits,
+                                        opponent_board_misses,
                                         sunk_ships,
                                     })));
                                 }

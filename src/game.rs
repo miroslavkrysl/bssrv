@@ -11,6 +11,7 @@ pub enum GameError {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BoardCell {
     Empty,
+    Miss,
     Hit,
     Ship(ShipKind),
 }
@@ -197,15 +198,10 @@ impl Game {
 
                         let ship = opponent_fleet.get_mut(&kind).unwrap();
                         ship.hit();
-                        opponent_board[r as usize][c as usize] = BoardCell::Hit;
 
                         if ship.is_sunk() {
-                            println!("{}", ship.is_sunk());
-                            println!("{}", ship.health);
                             result = ShootResult::Sunk(kind, opponent_layout.placements().placements().get(&kind).unwrap().clone())
                         } else {
-                            println!("{}", ship.is_sunk());
-                            println!("{}", ship.health);
                             result = ShootResult::Hit;
                         }
 
@@ -213,6 +209,13 @@ impl Game {
                     }
                 }
             }
+        }
+
+        match result {
+            ShootResult::Missed =>
+                opponent_board[position.row() as usize][position.col() as usize] = BoardCell::Miss,
+            ShootResult::Hit | ShootResult::Sunk(_, _) =>
+                opponent_board[position.row() as usize][position.col() as usize] = BoardCell::Hit,
         }
 
         // check whether the all opponent ships are sunk
@@ -226,7 +229,7 @@ impl Game {
         Ok(result)
     }
 
-    pub fn state(&self, player: usize) -> (Who, Hits, Layout, Hits, ShipsPlacements) {
+    pub fn state(&self, player: usize) -> (Who, Hits, Hits, Layout, Hits, Hits, ShipsPlacements) {
         let (
             board,
             layout,
@@ -246,20 +249,36 @@ impl Game {
         };
 
         let on_turn = if player == self.on_turn {Who::You} else {Who::Opponent};
-        let hits = Self::serialize_board(board);
+        let player_hits = Self::serialize_hits(board);
+        let player_misses = Self::serialize_misses(board);
         let layout = layout.clone();
-        let opponent_hits = Self::serialize_board(opponent_board);
+        let opponent_hits = Self::serialize_hits(opponent_board);
+        let opponent_misses = Self::serialize_misses(opponent_board);
         let opponent_sunk_ships = Self::serialize_sunk(opponent_layout, opponent_ships);
 
-        (on_turn, hits, layout, opponent_hits, opponent_sunk_ships)
+        (on_turn, player_hits, player_misses, layout, opponent_hits, opponent_misses, opponent_sunk_ships)
     }
 
-    pub fn serialize_board(board: &[[BoardCell; 10]; 10]) -> Hits {
+    pub fn serialize_hits(board: &[[BoardCell; 10]; 10]) -> Hits {
         let mut hits = Vec::new();
 
         for r in 0..10 {
             for c in 0..10 {
                 if let BoardCell::Hit = board[r as usize][c as usize] {
+                    hits.push(Position::new(r, c).unwrap());
+                }
+            }
+        }
+
+        Hits::new(hits)
+    }
+
+    pub fn serialize_misses(board: &[[BoardCell; 10]; 10]) -> Hits {
+        let mut hits = Vec::new();
+
+        for r in 0..10 {
+            for c in 0..10 {
+                if let BoardCell::Miss = board[r as usize][c as usize] {
                     hits.push(Position::new(r, c).unwrap());
                 }
             }

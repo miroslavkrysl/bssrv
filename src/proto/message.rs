@@ -4,7 +4,6 @@
 use crate::types::{Nickname, Layout, Position, RestoreState, ShipKind, Who, Placement};
 use std::fmt::{Formatter, Display};
 use std::fmt;
-use std::panic::resume_unwind;
 
 /// A message received from a client.
 #[derive(Debug, Clone)]
