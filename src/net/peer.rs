@@ -138,7 +138,7 @@ impl Peer {
                 Err(ref error) if error.kind() == io::ErrorKind::Interrupted => {
                     // interrupted, try again
                 }
-                Err(error) => {
+                Err(_) => {
                     // fatal error
                     return Err(PeerErrorKind::Closed.into())
                 },

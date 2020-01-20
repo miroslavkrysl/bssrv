@@ -231,7 +231,7 @@ impl App {
                             }
                         }
                     }
-                    Some(game_id) => {
+                    Some(_) => {
                         warn!("{} is already in a game", self.sessions_nicknames.get(&player_id).unwrap());
                         commands.push(Message(*peer_id, ServerMessage::IllegalState));
                     }

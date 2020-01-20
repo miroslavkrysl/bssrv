@@ -12,7 +12,7 @@ use crate::net::{Server, Poller, PollEvent, PeerErrorKind};
 use crate::proto::{ServerMessage};
 use std::collections::HashSet;
 use crate::app::App;
-use log::{debug, trace, info, warn, error};
+use log::{debug, info, warn, error};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::io;
@@ -158,7 +158,7 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
                         Ok(_) => {
                             reregister_peers.insert(id);
                         },
-                        Err(error) => {
+                        Err(_) => {
                             closed_peers.insert(id);
                         },
                     }
