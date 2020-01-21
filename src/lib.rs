@@ -1,29 +1,27 @@
-pub mod proto;
-pub mod types;
-pub mod net;
 pub mod app;
 pub mod game;
+pub mod net;
+pub mod proto;
+pub mod types;
 
-
-use std::net::SocketAddr;
-use std::time::{Duration, Instant};
-use std::str::FromStr;
-use crate::net::{Server, Poller, PollEvent, PeerErrorKind};
-use crate::proto::{ServerMessage};
-use std::collections::HashSet;
 use crate::app::App;
-use log::{debug, info, warn, error};
+use crate::net::{PeerErrorKind, PollEvent, Poller, Server};
+use crate::proto::ServerMessage;
+use log::{debug, error, info, warn};
+use std::collections::HashSet;
+use std::io;
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::io;
-
+use std::time::{Duration, Instant};
 
 /// A configuration values for the run_game_server function.
 pub struct Config {
     address: SocketAddr,
     max_players: usize,
     peer_timeout: Duration,
-    session_timeout: Duration
+    session_timeout: Duration,
 }
 
 impl Config {
@@ -50,12 +48,12 @@ impl Config {
 
 impl Config {
     /// Create a new server config.
-    pub fn new(address: SocketAddr, max_players: usize) -> Self {
+    pub fn new(address: SocketAddr, max_players: usize, peer_timeout: Duration) -> Self {
         Config {
             address,
             max_players,
-            peer_timeout: Duration::from_secs(5),
-            session_timeout: Duration::from_secs(300)
+            peer_timeout,
+            session_timeout: Duration::from_secs(300),
         }
     }
 }
@@ -66,21 +64,19 @@ impl Default for Config {
             address: SocketAddr::from_str("0.0.0.0:10000").unwrap(),
             max_players: 128,
             peer_timeout: Duration::from_secs(10),
-            session_timeout: Duration::from_secs(60)
+            session_timeout: Duration::from_secs(60),
         }
     }
 }
 
-
 /// A command for the running server.
-pub enum  Command {
+pub enum Command {
     /// Send message to the peer with particular id.
     Message(usize, ServerMessage),
 
     /// Close the peer with the particular id.
     Close(usize),
 }
-
 
 /// Run the game server.
 ///
@@ -89,7 +85,7 @@ pub enum  Command {
 /// actions for the server are returned back and than processed too.
 ///
 /// If the peer is inactive for a longer period than is configured, the peer is disconnected.
-pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<()>{
+pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<()> {
     let mut server = Server::new(config.address().clone())?;
     let mut app = App::new(config.max_players(), config.session_timeout().clone());
     let mut poller = Poller::new(128)?;
@@ -110,8 +106,14 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
 
     info!("starting the server on address: {}", config.address());
     info!("maximum number of players: {}", config.max_players());
-    info!("sessions timeout: {} seconds", config.session_timeout().as_secs());
-    info!("connection timeout: {} seconds", config.peer_timeout().as_secs());
+    info!(
+        "sessions timeout: {} seconds",
+        config.session_timeout().as_secs()
+    );
+    info!(
+        "connection timeout: {} seconds",
+        config.peer_timeout().as_secs()
+    );
 
     // polling loop
     loop {
@@ -127,7 +129,7 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
                     new_peers.insert(id);
 
                     debug!("new connection {} accepted from {}", id, address);
-                },
+                }
                 PollEvent::Read(id) => {
                     let peer = server.peer_mut(&id).unwrap();
 
@@ -137,32 +139,32 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
                                 debug!("incoming message from {:0>16X}: {}", id, message);
                                 incoming_messages.push((id, message));
                             }
-                        },
+                        }
                         Err(error) => {
                             match error.kind() {
                                 PeerErrorKind::Closed => {
                                     debug!("connection {:0>16X} closed", id);
-                                },
+                                }
                                 PeerErrorKind::Deserialization(error) => {
                                     error!("error in message stream: {}", error);
-                                },
+                                }
                             }
                             closed_peers.insert(id);
-                        },
+                        }
                     }
-                },
+                }
                 PollEvent::Write(id) => {
                     let peer = server.peer_mut(&id).unwrap();
 
                     match peer.do_write() {
                         Ok(_) => {
                             reregister_peers.insert(id);
-                        },
+                        }
                         Err(_) => {
                             closed_peers.insert(id);
-                        },
+                        }
                     }
-                },
+                }
             }
         }
 
@@ -205,7 +207,6 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
         // Do a cleanup.
         commands.extend(app.handle_cleanup());
 
-
         // If shutdown - handle shutdown
         end = shutdown.load(Ordering::SeqCst);
         if end {
@@ -224,14 +225,14 @@ pub fn run_game_server(config: Config, shutdown: Arc<AtomicBool>) -> io::Result<
                         peer.add_message(&message);
                         reregister_peers.insert(id);
                     }
-                },
+                }
                 Command::Close(id) => {
                     // force close on peer
 
                     let peer = server.remove_peer(&id).unwrap();
                     peer.close();
                     poller.deregister_peer(&peer, &id)?;
-                },
+                }
             }
         }
 

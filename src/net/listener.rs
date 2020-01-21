@@ -1,8 +1,8 @@
-use std::net::SocketAddr;
-use mio::net::TcpListener;
-use std::io;
-use mio::{Poll, Token, Ready, PollOpt};
 use crate::net::peer::Peer;
+use mio::net::TcpListener;
+use mio::{Poll, PollOpt, Ready, Token};
+use std::io;
+use std::net::SocketAddr;
 
 pub struct Listener {
     address: SocketAddr,
@@ -14,7 +14,7 @@ impl Listener {
     pub fn new(address: SocketAddr) -> io::Result<Self> {
         Ok(Listener {
             address,
-            listener: TcpListener::bind(&address)?
+            listener: TcpListener::bind(&address)?,
         })
     }
 
@@ -25,11 +25,7 @@ impl Listener {
 
     /// Register the listener for polling.
     pub fn register(&self, poll: &Poll, token: Token) -> io::Result<()> {
-        poll.register(
-            &self.listener,
-            token,
-            Ready::readable(),
-            PollOpt::level())
+        poll.register(&self.listener, token, Ready::readable(), PollOpt::level())
     }
 
     /// Deregister the listener from polling.

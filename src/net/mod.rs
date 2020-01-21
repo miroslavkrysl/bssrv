@@ -1,12 +1,12 @@
-mod peer;
 mod listener;
-mod server;
+mod peer;
 mod poller;
+mod server;
 
-pub use server::Server;
+pub use listener::Listener;
 pub use peer::Peer;
 pub use peer::PeerError;
 pub use peer::PeerErrorKind;
-pub use poller::Poller;
 pub use poller::PollEvent;
-pub use listener::Listener;
+pub use poller::Poller;
+pub use server::Server;

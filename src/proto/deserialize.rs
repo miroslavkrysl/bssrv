@@ -1,14 +1,15 @@
 //! Client messages deserialization logic
 
-use crate::types::{Nickname, Layout, Position, Placement, Orientation, ShipsPlacements, ShipKind};
-use crate::proto::{ClientMessage};
-use crate::proto::codec::{find, Payload, PAYLOAD_START, ESCAPE, MESSAGE_END, MAX_MESSAGE_LENGTH, unescape};
-use std::fmt::{Display, Formatter};
-use std::fmt;
+use crate::proto::codec::{
+    find, unescape, Payload, ESCAPE, MAX_MESSAGE_LENGTH, MESSAGE_END, PAYLOAD_START,
+};
+use crate::proto::ClientMessage;
+use crate::types::{Layout, Nickname, Orientation, Placement, Position, ShipKind, ShipsPlacements};
+use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::num::ParseIntError;
-use std::collections::{HashMap};
-
 
 // ---Stream deserialize---
 
@@ -38,7 +39,6 @@ impl Deserializer {
     /// Deserialize all available messages from the stream of bytes.
     /// If there is no message yet to be deserialized, the returned vector is empty.
     pub fn deserialize(&mut self, bytes: &[u8]) -> Result<(), DeserializationError> {
-
         // add new bytes to undecoded bytes from previous call
         self.byte_buffer.extend_from_slice(bytes);
 
@@ -49,7 +49,7 @@ impl Deserializer {
 
                 self.string_buffer.push_str(&string);
                 self.byte_buffer.clear();
-            },
+            }
             Err(error) => {
                 // some characters are invalid or incomplete
 
@@ -63,12 +63,14 @@ impl Deserializer {
 
                 // store complete characters into the string buffer
                 unsafe {
-                    self.string_buffer.push_str(std::str::from_utf8_unchecked(&self.byte_buffer[..error.valid_up_to()]))
+                    self.string_buffer.push_str(std::str::from_utf8_unchecked(
+                        &self.byte_buffer[..error.valid_up_to()],
+                    ))
                 }
 
                 // move incomplete characters to the beginning of the byte buffer
                 self.byte_buffer.drain(..error.valid_up_to());
-            },
+            }
         }
 
         // deserialize decoded string into messages
@@ -89,7 +91,7 @@ impl Deserializer {
                     }
 
                     break;
-                },
+                }
                 Some(separator_pos) => {
                     // a message end was found
 
@@ -102,7 +104,7 @@ impl Deserializer {
                     // build message
                     let message = ClientMessage::deserialize(&message_string)?;
                     self.message_buffer.push(message);
-                },
+                }
             }
         }
 
@@ -151,19 +153,21 @@ impl ClientMessage {
             "login" => {
                 let nickname = Nickname::deserialize(&mut payload)?;
                 Ok(ClientMessage::Login(nickname))
-            },
+            }
             "join_game" => Ok(ClientMessage::JoinGame),
             "layout" => {
                 let layout = Layout::deserialize(&mut payload)?;
                 Ok(ClientMessage::Layout(layout))
-            },
+            }
             "shoot" => {
                 let position = Position::deserialize(&mut payload)?;
                 Ok(ClientMessage::Shoot(position))
-            },
+            }
             "leave_game" => Ok(ClientMessage::LeaveGame),
             "logout" => Ok(ClientMessage::LogOut),
-            _ => Err(DeserializationError::new(DeserializationErrorKind::UnknownHeader))
+            _ => Err(DeserializationError::new(
+                DeserializationErrorKind::UnknownHeader,
+            )),
         }
     }
 }
@@ -179,16 +183,20 @@ impl DeserializeFromPayload for Nickname {
         let nickname = payload.take_string();
 
         if let Err(error) = nickname {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Nickname, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Nickname,
+                error.into(),
+            )
+            .into());
         }
 
         match Nickname::new(nickname.unwrap()) {
             Ok(nickname) => Ok(nickname),
-            Err(error) => Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Nickname, error.into()).into()),
+            Err(error) => Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Nickname,
+                error.into(),
+            )
+            .into()),
         }
     }
 }
@@ -199,22 +207,28 @@ impl DeserializeFromPayload for Position {
         let col = payload.take_u8();
 
         if let Err(error) = row {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Position, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Position,
+                error.into(),
+            )
+            .into());
         }
 
         if let Err(error) = col {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Position, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Position,
+                error.into(),
+            )
+            .into());
         }
 
         match Position::new(row.unwrap(), col.unwrap()) {
             Ok(position) => Ok(position),
-            Err(error) => Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Position, error.into()).into()),
+            Err(error) => Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Position,
+                error.into(),
+            )
+            .into()),
         }
     }
 }
@@ -224,9 +238,11 @@ impl DeserializeFromPayload for Orientation {
         let string = payload.take_string();
 
         if let Err(error) = string {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Orientation, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Orientation,
+                error.into(),
+            )
+            .into());
         }
 
         match string.unwrap().as_str() {
@@ -234,10 +250,13 @@ impl DeserializeFromPayload for Orientation {
             "north" => Ok(Orientation::North),
             "west" => Ok(Orientation::West),
             "south" => Ok(Orientation::South),
-            _ => Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Orientation,
-                    Box::new(DeserializationError::new(DeserializationErrorKind::InvalidEnumValue))).into())
+            _ => Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Orientation,
+                Box::new(DeserializationError::new(
+                    DeserializationErrorKind::InvalidEnumValue,
+                )),
+            )
+            .into()),
         }
     }
 }
@@ -248,37 +267,44 @@ impl DeserializeFromPayload for Placement {
         let orientation = Orientation::deserialize(payload);
 
         if let Err(error) = position {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Placement, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Placement,
+                error.into(),
+            )
+            .into());
         }
 
         if let Err(error) = orientation {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Placement, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Placement,
+                error.into(),
+            )
+            .into());
         }
 
         Ok(Placement::new(position.unwrap(), orientation.unwrap()))
     }
 }
 
-
 impl DeserializeFromPayload for Layout {
     fn deserialize(payload: &mut Payload) -> Result<Self, DeserializationError> {
         let placements = ShipsPlacements::deserialize(payload);
 
         if let Err(error) = placements {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Layout, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Layout,
+                error.into(),
+            )
+            .into());
         }
 
         match Layout::new(placements.unwrap()) {
             Ok(layout) => Ok(layout),
-            Err(error) => Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::Layout, error.into()).into()),
+            Err(error) => Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::Layout,
+                error.into(),
+            )
+            .into()),
         }
     }
 }
@@ -288,9 +314,11 @@ impl DeserializeFromPayload for ShipsPlacements {
         let size = payload.take_u8();
 
         if let Err(error) = size {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::ShipsPlacements, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::ShipsPlacements,
+                error.into(),
+            )
+            .into());
         }
 
         let mut placements = HashMap::with_capacity(5);
@@ -300,15 +328,19 @@ impl DeserializeFromPayload for ShipsPlacements {
             let placement = Placement::deserialize(payload);
 
             if let Err(error) = kind {
-                return Err(
-                    StructDeserializationError::new(
-                        StructDeserializeErrorKind::ShipsPlacements, error.into()).into())
+                return Err(StructDeserializationError::new(
+                    StructDeserializeErrorKind::ShipsPlacements,
+                    error.into(),
+                )
+                .into());
             }
 
             if let Err(error) = placement {
-                return Err(
-                    StructDeserializationError::new(
-                        StructDeserializeErrorKind::ShipsPlacements, error.into()).into())
+                return Err(StructDeserializationError::new(
+                    StructDeserializeErrorKind::ShipsPlacements,
+                    error.into(),
+                )
+                .into());
             }
 
             placements.insert(kind.unwrap(), placement.unwrap());
@@ -323,9 +355,11 @@ impl DeserializeFromPayload for ShipKind {
         let string = payload.take_string();
 
         if let Err(error) = string {
-            return Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::ShipKind, error.into()).into())
+            return Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::ShipKind,
+                error.into(),
+            )
+            .into());
         }
 
         match string.unwrap().as_str() {
@@ -334,16 +368,16 @@ impl DeserializeFromPayload for ShipKind {
             "C" => Ok(ShipKind::Cruiser),
             "D" => Ok(ShipKind::Destroyer),
             "P" => Ok(ShipKind::PatrolBoat),
-            _ => Err(
-                StructDeserializationError::new(
-                    StructDeserializeErrorKind::ShipKind,
-                    Box::new(DeserializationError::new(DeserializationErrorKind::InvalidEnumValue))).into())
+            _ => Err(StructDeserializationError::new(
+                StructDeserializeErrorKind::ShipKind,
+                Box::new(DeserializationError::new(
+                    DeserializationErrorKind::InvalidEnumValue,
+                )),
+            )
+            .into()),
         }
     }
 }
-
-
-
 
 // ---ERRORS---
 
@@ -363,11 +397,17 @@ impl Display for DeserializationErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             DeserializationErrorKind::UnknownHeader => write!(f, "Unknown header."),
-            DeserializationErrorKind::NoMorePayloadItems => write!(f, "Further payload item was expected, but not present."),
+            DeserializationErrorKind::NoMorePayloadItems => {
+                write!(f, "Further payload item was expected, but not present.")
+            }
             DeserializationErrorKind::InvalidEnumValue => write!(f, "Invalid enum value."),
-            DeserializationErrorKind::MessageLengthExceeded => write!(f, "String segment is too long to be a valid message."),
+            DeserializationErrorKind::MessageLengthExceeded => {
+                write!(f, "String segment is too long to be a valid message.")
+            }
             DeserializationErrorKind::InvalidUtf8 => write!(f, "Invalid UTF-8 byte sequence."),
-            DeserializationErrorKind::ParseInt(ref error) => write!(f, "Integer can't be properly deserialized: {}", error),
+            DeserializationErrorKind::ParseInt(ref error) => {
+                write!(f, "Integer can't be properly deserialized: {}", error)
+            }
             DeserializationErrorKind::StructDeserialization(ref error) => write!(f, "{}", error),
         }
     }
@@ -377,15 +417,13 @@ impl Display for DeserializationErrorKind {
 #[derive(Debug, Eq, PartialEq)]
 pub struct DeserializationError {
     /// Kind of deserialization error.
-    kind: DeserializationErrorKind
+    kind: DeserializationErrorKind,
 }
 
 impl DeserializationError {
     /// Create new deserialization error of given kind.
     pub fn new(kind: DeserializationErrorKind) -> Self {
-        DeserializationError {
-            kind
-        }
+        DeserializationError { kind }
     }
 }
 
@@ -430,20 +468,27 @@ pub enum StructDeserializeErrorKind {
 impl Display for StructDeserializeErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            StructDeserializeErrorKind::Nickname =>
-                write!(f, "Nickname can't be properly deserialized"),
-            StructDeserializeErrorKind::ShipKind =>
-                write!(f, "ShipId can't be properly deserialized"),
-            StructDeserializeErrorKind::Position =>
-                write!(f, "Position can't be properly deserialized"),
-            StructDeserializeErrorKind::Orientation =>
-                write!(f, "Orientation can't be properly deserialized"),
-            StructDeserializeErrorKind::Placement =>
-                write!(f, "Placement can't be properly deserialized"),
-            StructDeserializeErrorKind::ShipsPlacements =>
-                write!(f, "ShipsPlacements can't be properly deserialized"),
-            StructDeserializeErrorKind::Layout =>
-                write!(f, "Layout can't be properly deserialized"),
+            StructDeserializeErrorKind::Nickname => {
+                write!(f, "Nickname can't be properly deserialized")
+            }
+            StructDeserializeErrorKind::ShipKind => {
+                write!(f, "ShipId can't be properly deserialized")
+            }
+            StructDeserializeErrorKind::Position => {
+                write!(f, "Position can't be properly deserialized")
+            }
+            StructDeserializeErrorKind::Orientation => {
+                write!(f, "Orientation can't be properly deserialized")
+            }
+            StructDeserializeErrorKind::Placement => {
+                write!(f, "Placement can't be properly deserialized")
+            }
+            StructDeserializeErrorKind::ShipsPlacements => {
+                write!(f, "ShipsPlacements can't be properly deserialized")
+            }
+            StructDeserializeErrorKind::Layout => {
+                write!(f, "Layout can't be properly deserialized")
+            }
         }
     }
 }
@@ -455,16 +500,13 @@ pub struct StructDeserializationError {
     kind: StructDeserializeErrorKind,
 
     /// Cause of the error.
-    error: Box<dyn Error>
+    error: Box<dyn Error>,
 }
 
 impl StructDeserializationError {
     /// Create new struct deserialization error of given kind and cause.
     fn new(kind: StructDeserializeErrorKind, cause: Box<dyn Error>) -> Self {
-        StructDeserializationError {
-            kind,
-            error: cause
-        }
+        StructDeserializationError { kind, error: cause }
     }
 }
 

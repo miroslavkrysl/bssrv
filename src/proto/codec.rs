@@ -1,6 +1,6 @@
-use std::iter::Iterator;
-use std::collections::LinkedList;
 use crate::proto::deserialize::{DeserializationError, DeserializationErrorKind};
+use std::collections::LinkedList;
+use std::iter::Iterator;
 
 /// A character denoting message end.
 pub const MESSAGE_END: char = '\n';
@@ -72,8 +72,7 @@ pub fn find(string: &str, to_find: char, escape: char) -> Option<usize> {
 }
 
 /// Escape characters in a string with the escape character.
-pub fn escape(string: &str, chars: &[char], escape: char) -> String
-{
+pub fn escape(string: &str, chars: &[char], escape: char) -> String {
     let mut escaped = String::new();
 
     for sc in string.chars() {
@@ -91,8 +90,7 @@ pub fn escape(string: &str, chars: &[char], escape: char) -> String
 }
 
 /// Unescape characters in a string escaped by the escape character.
-pub fn unescape(string: &str, chars: &[char], escape: char) -> String
-{
+pub fn unescape(string: &str, chars: &[char], escape: char) -> String {
     let mut unescaped = String::new();
     let mut is_escape = false;
 
@@ -125,14 +123,14 @@ pub fn unescape(string: &str, chars: &[char], escape: char) -> String
 /// that can be appended to back of the payload
 /// or taken from the front of the payload.
 pub struct Payload {
-    items: LinkedList<String>
+    items: LinkedList<String>,
 }
 
 impl Payload {
     /// Create an empty payload - it has no items.
     pub fn empty() -> Self {
         Payload {
-            items: LinkedList::new()
+            items: LinkedList::new(),
         }
     }
 
@@ -141,13 +139,12 @@ impl Payload {
     pub fn deserialize(serialized: &str) -> Self {
         let parts = split(serialized, PAYLOAD_ITEM_SEPARATOR, ESCAPE);
 
-        let items = parts.iter()
+        let items = parts
+            .iter()
             .map(|part| unescape(part, &[ESCAPE, PAYLOAD_ITEM_SEPARATOR], ESCAPE))
             .collect();
 
-        Payload {
-            items
-        }
+        Payload { items }
     }
 
     /// Serialize payload items into a string.
@@ -157,7 +154,9 @@ impl Payload {
             return None;
         }
 
-        let escaped = self.items.iter()
+        let escaped = self
+            .items
+            .iter()
             .map(|item| escape(&item, &[ESCAPE, PAYLOAD_ITEM_SEPARATOR], ESCAPE))
             .collect::<Vec<_>>();
 
@@ -197,7 +196,9 @@ impl Payload {
         if let Some(item) = self.items.pop_front() {
             Ok(item)
         } else {
-            Err(DeserializationError::new(DeserializationErrorKind::NoMorePayloadItems))
+            Err(DeserializationError::new(
+                DeserializationErrorKind::NoMorePayloadItems,
+            ))
         }
     }
 
@@ -215,7 +216,6 @@ impl Payload {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::proto::codec::{escape, unescape};
@@ -231,7 +231,6 @@ mod tests {
         let unescaped = unescape(r"he;ll\:oj\\;\\\:\\\\;ello", &[';', ':'], '\\');
         assert_eq!(unescaped, r"he;ll:oj\\;\\:\\\\;ello");
     }
-
 
     #[test]
     fn test_escape_unescape() {

@@ -1,12 +1,12 @@
+use crate::proto::{ClientMessage, DeserializationError, Deserializer, Serializer, ServerMessage};
 use mio::net::TcpStream;
-use std::net::{SocketAddr, Shutdown};
-use crate::proto::{Deserializer, Serializer, ClientMessage, DeserializationError, ServerMessage};
-use mio::{Poll, Token, Ready, PollOpt};
-use std::{io, fmt};
-use std::fmt::{Display, Formatter};
+use mio::{Poll, PollOpt, Ready, Token};
 use std::error::Error;
+use std::fmt::{Display, Formatter};
 use std::io::{Read, Write};
+use std::net::{Shutdown, SocketAddr};
 use std::time::Instant;
+use std::{fmt, io};
 
 /// A network remote point with associated stream, address, serializer and deserializer.
 pub struct Peer {
@@ -14,7 +14,7 @@ pub struct Peer {
     address: SocketAddr,
     deserializer: Deserializer,
     serializer: Serializer,
-    last_active: Instant
+    last_active: Instant,
 }
 
 impl Peer {
@@ -25,7 +25,7 @@ impl Peer {
             address,
             deserializer: Deserializer::new(),
             serializer: Serializer::new(),
-            last_active: Instant::now()
+            last_active: Instant::now(),
         }
     }
 
@@ -41,11 +41,7 @@ impl Peer {
 
     /// Register the peer for polling.
     pub fn register(&self, poll: &Poll, token: Token) -> io::Result<()> {
-        poll.register(
-            &self.stream,
-            token,
-            Ready::readable(),
-            PollOpt::edge())
+        poll.register(&self.stream, token, Ready::readable(), PollOpt::edge())
     }
 
     /// Reregister the peer for polling.
@@ -56,11 +52,7 @@ impl Peer {
             ready = ready | Ready::writable();
         }
 
-        poll.reregister(
-            &self.stream,
-            token,
-            ready,
-            PollOpt::edge())
+        poll.reregister(&self.stream, token, ready, PollOpt::edge())
     }
 
     /// Deregister the the peer from polling.
@@ -76,7 +68,7 @@ impl Peer {
     /// Read as much data as possible at the moment from peer and build messages from it.
     pub fn do_read(&mut self) -> Result<Vec<ClientMessage>, PeerError> {
         self.last_active = Instant::now();
-        
+
         // buffer for incoming bytes
         let mut buffer = [0; 1024];
 
@@ -140,8 +132,8 @@ impl Peer {
                 }
                 Err(_) => {
                     // fatal error
-                    return Err(PeerErrorKind::Closed.into())
-                },
+                    return Err(PeerErrorKind::Closed.into());
+                }
             }
         }
 
@@ -155,7 +147,6 @@ impl Peer {
         let _ = self.stream.shutdown(Shutdown::Both);
     }
 }
-
 
 // ---ERRORS---
 
@@ -179,15 +170,13 @@ impl Display for PeerErrorKind {
 #[derive(Debug, Eq, PartialEq)]
 pub struct PeerError {
     /// Kind of peer error.
-    kind: PeerErrorKind
+    kind: PeerErrorKind,
 }
 
 impl PeerError {
     /// Create a new peer error.
     pub fn new(kind: PeerErrorKind) -> Self {
-        PeerError {
-            kind
-        }
+        PeerError { kind }
     }
 
     /// Get the error kind.

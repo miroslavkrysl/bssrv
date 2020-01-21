@@ -1,4 +1,6 @@
-use crate::types::{Placement, ShipsPlacements, Who, Hits, Position, ShipKind, Orientation, Layout};
+use crate::types::{
+    Hits, Layout, Orientation, Placement, Position, ShipKind, ShipsPlacements, Who,
+};
 use std::collections::HashMap;
 
 /// An error indicating that player did something illegal with the game.
@@ -39,7 +41,7 @@ impl Ship {
     pub fn new(kind: ShipKind) -> Self {
         Ship {
             kind,
-            health: kind.cells()
+            health: kind.cells(),
         }
     }
 
@@ -76,7 +78,6 @@ pub struct Game {
 }
 
 impl Game {
-
     /// Create a new game with the two players.
     pub fn new(first_player: usize, second_player: usize) -> Self {
         Game {
@@ -89,22 +90,24 @@ impl Game {
             first_ships: HashMap::new(),
             second_ships: HashMap::new(),
             on_turn: first_player,
-            winner: None
+            winner: None,
         }
     }
 
     /// Set the ships layout for the player.
     pub fn set_layout(&mut self, player: usize, layout: Layout) -> Result<bool, GameError> {
         let (l, s, b) = match player {
-            id if id == self.first_player => {
-                (&mut self.first_layout, &mut self.first_ships, &mut self.first_board)
-            }
-            id if id == self.second_player => {
-                (&mut self.second_layout, &mut self.second_ships, &mut self.second_board)
-            }
-            _ => {
-                panic!("player {} is not in this game", player)
-            }
+            id if id == self.first_player => (
+                &mut self.first_layout,
+                &mut self.first_ships,
+                &mut self.first_board,
+            ),
+            id if id == self.second_player => (
+                &mut self.second_layout,
+                &mut self.second_ships,
+                &mut self.second_board,
+            ),
+            _ => panic!("player {} is not in this game", player),
         };
 
         if l.is_some() {
@@ -118,7 +121,10 @@ impl Game {
         *l = Some(layout);
 
         // prepare fleet
-        s.insert(ShipKind::AircraftCarrier, Ship::new(ShipKind::AircraftCarrier));
+        s.insert(
+            ShipKind::AircraftCarrier,
+            Ship::new(ShipKind::AircraftCarrier),
+        );
         s.insert(ShipKind::Battleship, Ship::new(ShipKind::Battleship));
         s.insert(ShipKind::Cruiser, Ship::new(ShipKind::Cruiser));
         s.insert(ShipKind::Destroyer, Ship::new(ShipKind::Destroyer));
@@ -162,30 +168,28 @@ impl Game {
     /// Get the other player in the game.
     pub fn other_player(&self, player: &usize) -> usize {
         match player {
-            id if *id == self.first_player => {
-                self.second_player
-            }
-            id if *id == self.second_player => {
-                self.first_player
-            }
-            _ => {
-                panic!("player {} is not in this game", player)
-            }
+            id if *id == self.first_player => self.second_player,
+            id if *id == self.second_player => self.first_player,
+            _ => panic!("player {} is not in this game", player),
         }
     }
 
     /// Shoot at position and get the result.
     pub fn shoot(&mut self, player: usize, position: Position) -> Result<ShootResult, GameError> {
         let (opponent, opponent_layout, opponent_board, opponent_fleet) = match player {
-            id if id == self.second_player => {
-                (self.first_player, self.first_layout.as_ref().unwrap(), &mut self.first_board, &mut self.first_ships)
-            }
-            id if id == self.first_player => {
-                (self.second_player, self.second_layout.as_ref().unwrap(), &mut self.second_board, &mut self.second_ships)
-            }
-            _ => {
-                panic!("player {} is not in this game", player)
-            }
+            id if id == self.second_player => (
+                self.first_player,
+                self.first_layout.as_ref().unwrap(),
+                &mut self.first_board,
+                &mut self.first_ships,
+            ),
+            id if id == self.first_player => (
+                self.second_player,
+                self.second_layout.as_ref().unwrap(),
+                &mut self.second_board,
+                &mut self.second_ships,
+            ),
+            _ => panic!("player {} is not in this game", player),
         };
 
         if let Some(_) = self.winner {
@@ -193,7 +197,7 @@ impl Game {
         }
 
         if player != self.on_turn {
-            return Err(GameError::NotOnTurn)
+            return Err(GameError::NotOnTurn);
         }
 
         // cell is already hit
@@ -217,7 +221,15 @@ impl Game {
                         ship.hit();
 
                         if ship.is_sunk() {
-                            result = ShootResult::Sunk(kind, opponent_layout.placements().placements().get(&kind).unwrap().clone())
+                            result = ShootResult::Sunk(
+                                kind,
+                                opponent_layout
+                                    .placements()
+                                    .placements()
+                                    .get(&kind)
+                                    .unwrap()
+                                    .clone(),
+                            )
                         } else {
                             result = ShootResult::Hit;
                         }
@@ -229,10 +241,12 @@ impl Game {
         }
 
         match result {
-            ShootResult::Missed =>
-                opponent_board[position.row() as usize][position.col() as usize] = BoardCell::Miss,
-            ShootResult::Hit | ShootResult::Sunk(_, _) =>
-                opponent_board[position.row() as usize][position.col() as usize] = BoardCell::Hit,
+            ShootResult::Missed => {
+                opponent_board[position.row() as usize][position.col() as usize] = BoardCell::Miss
+            }
+            ShootResult::Hit | ShootResult::Sunk(_, _) => {
+                opponent_board[position.row() as usize][position.col() as usize] = BoardCell::Hit
+            }
         }
 
         // check whether the all opponent ships are sunk
@@ -248,25 +262,29 @@ impl Game {
 
     /// Get the state of game for a concrete player.
     pub fn state(&self, player: usize) -> (Who, Hits, Hits, Layout, Hits, Hits, ShipsPlacements) {
-        let (
-            board,
-            layout,
-            opponent_board,
-            opponent_layout,
-            opponent_ships
-        ) = match player {
-            id if id == self.second_player => {
-                (&self.second_board, self.second_layout.as_ref().unwrap(), &self.first_board, self.first_layout.as_ref().unwrap(), &self.first_ships)
-            }
-            id if id == self.first_player => {
-                (&self.first_board, self.first_layout.as_ref().unwrap(), &self.second_board, self.second_layout.as_ref().unwrap(), &self.second_ships)
-            }
-            _ => {
-                panic!("player {} is not in this game", player)
-            }
+        let (board, layout, opponent_board, opponent_layout, opponent_ships) = match player {
+            id if id == self.second_player => (
+                &self.second_board,
+                self.second_layout.as_ref().unwrap(),
+                &self.first_board,
+                self.first_layout.as_ref().unwrap(),
+                &self.first_ships,
+            ),
+            id if id == self.first_player => (
+                &self.first_board,
+                self.first_layout.as_ref().unwrap(),
+                &self.second_board,
+                self.second_layout.as_ref().unwrap(),
+                &self.second_ships,
+            ),
+            _ => panic!("player {} is not in this game", player),
         };
 
-        let on_turn = if player == self.on_turn {Who::You} else {Who::Opponent};
+        let on_turn = if player == self.on_turn {
+            Who::You
+        } else {
+            Who::Opponent
+        };
         let player_hits = Self::serialize_hits(board);
         let player_misses = Self::serialize_misses(board);
         let layout = layout.clone();
@@ -274,7 +292,15 @@ impl Game {
         let opponent_misses = Self::serialize_misses(opponent_board);
         let opponent_sunk_ships = Self::serialize_sunk(opponent_layout, opponent_ships);
 
-        (on_turn, player_hits, player_misses, layout, opponent_hits, opponent_misses, opponent_sunk_ships)
+        (
+            on_turn,
+            player_hits,
+            player_misses,
+            layout,
+            opponent_hits,
+            opponent_misses,
+            opponent_sunk_ships,
+        )
     }
 
     /// Serialize all board cells which are hit into the Hits structure.
@@ -313,7 +339,10 @@ impl Game {
 
         for (kind, ship) in ships {
             if ship.is_sunk() {
-                placements.insert(*kind, layout.placements().placements().get(&kind).unwrap().clone());
+                placements.insert(
+                    *kind,
+                    layout.placements().placements().get(&kind).unwrap().clone(),
+                );
             }
         }
 

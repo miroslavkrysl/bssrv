@@ -1,12 +1,12 @@
-use std::collections::{HashMap};
-use crate::types::{Nickname, RestoreState, Layout, Position, Who};
-use crate::proto::{ClientMessage, ServerMessage};
-use crate::Command;
-use crate::Command::{Message};
-use log::{trace, debug, warn, info};
 use crate::game::{Game, GameError, ShootResult};
+use crate::proto::{ClientMessage, ServerMessage};
+use crate::types::{Layout, Nickname, Position, RestoreState, Who};
+use crate::Command;
+use crate::Command::Message;
+use log::{debug, info, trace, warn};
 use rand::Rng;
-use std::time::{Instant, Duration};
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 pub struct App {
     /// Limit of maximum players.
@@ -66,9 +66,7 @@ impl App {
         debug!("peer {:0>16X} is alive", peer_id);
 
         match self.peers_sessions.get(peer_id) {
-            None => {
-                trace!("no session")
-            }
+            None => trace!("no session"),
             Some(player_id) => {
                 let nickname = self.sessions_nicknames.get(player_id).unwrap();
                 trace!("logged as {}", nickname);
@@ -88,72 +86,91 @@ impl App {
         let mut commands = Vec::new();
 
         match self.peers_sessions.get(peer_id) {
-            None => {
-                match self.nicknames_sessions.get(nickname.get()){
-                    None => {
-                        trace!("not registered yet - registering");
+            None => match self.nicknames_sessions.get(nickname.get()) {
+                None => {
+                    trace!("not registered yet - registering");
 
-                        if self.nicknames_sessions.len() >= self.max_players {
-                            warn!("registration of player {} refused because the maximum number of players is reached: {}",
+                    if self.nicknames_sessions.len() >= self.max_players {
+                        warn!("registration of player {} refused because the maximum number of players is reached: {}",
                                   nickname.get(),
                                   self.max_players);
 
-                            commands.push(Message(*peer_id, ServerMessage::LoginFull));
-                        } else {
-                            info!("peer {:0>16X} registered as {}", peer_id, nickname.get());
+                        commands.push(Message(*peer_id, ServerMessage::LoginFull));
+                    } else {
+                        info!("peer {:0>16X} registered as {}", peer_id, nickname.get());
 
-                            let player_id = self.unique_session_key();
-                            self.nicknames_sessions.insert(nickname.get().clone(), player_id);
-                            self.sessions_nicknames.insert(player_id, nickname.get().clone());
-                            self.peers_sessions.insert(*peer_id, player_id);
-                            self.sessions_peers.insert(player_id, *peer_id);
-                            self.last_active.insert(player_id, Instant::now());
+                        let player_id = self.unique_session_key();
+                        self.nicknames_sessions
+                            .insert(nickname.get().clone(), player_id);
+                        self.sessions_nicknames
+                            .insert(player_id, nickname.get().clone());
+                        self.peers_sessions.insert(*peer_id, player_id);
+                        self.sessions_peers.insert(player_id, *peer_id);
+                        self.last_active.insert(player_id, Instant::now());
 
-                            commands.push(Message(*peer_id, ServerMessage::LoginOk))
+                        commands.push(Message(*peer_id, ServerMessage::LoginOk))
+                    }
+                }
+                Some(player_id) => {
+                    if let Some(id) = self.sessions_peers.get(player_id) {
+                        warn!(
+                            "{} is already registered and online with peer {:0>16X}",
+                            nickname.get(),
+                            id
+                        );
+                        commands.push(Message(*peer_id, ServerMessage::LoginTaken));
+                    } else {
+                        info!("{} is already registered but offline - restoring the session with peer {}", nickname.get(), peer_id);
+
+                        {
+                            let last_active = self.last_active.get_mut(&player_id).unwrap();
+                            *last_active = Instant::now();
                         }
-                    },
-                    Some(player_id) => {
-                        if let Some(id) = self.sessions_peers.get(player_id) {
-                            warn!("{} is already registered and online with peer {:0>16X}", nickname.get(), id);
-                            commands.push(Message(*peer_id, ServerMessage::LoginTaken));
-                        } else {
-                            info!("{} is already registered but offline - restoring the session with peer {}", nickname.get(), peer_id);
 
-                            {
-                                let last_active = self.last_active.get_mut(&player_id).unwrap();
-                                *last_active = Instant::now();
+                        self.sessions_peers.insert(*player_id, *peer_id);
+                        self.peers_sessions.insert(*peer_id, *player_id);
+
+                        match self.sessions_games.get(player_id) {
+                            None => {
+                                trace!("not in any game");
+                                commands.push(Message(
+                                    *peer_id,
+                                    ServerMessage::LoginRestored(RestoreState::Lobby),
+                                ));
                             }
+                            Some(game_id) => {
+                                let game = self.games.get(game_id).unwrap();
+                                let opponent_id = &game.other_player(&player_id);
+                                let opponent_nickname =
+                                    self.sessions_nicknames.get(opponent_id).unwrap();
 
-                            self.sessions_peers.insert(*player_id, *peer_id);
-                            self.peers_sessions.insert(*peer_id, *player_id);
+                                trace!(
+                                    "in game {:0>16X} - notifying opponent {}",
+                                    game_id,
+                                    opponent_nickname
+                                );
 
-                            match self.sessions_games.get(player_id) {
-                                None => {
-                                    trace!("not in any game");
-                                    commands.push(Message(*peer_id, ServerMessage::LoginRestored(RestoreState::Lobby)));
+                                if let Some(opponent_peer_id) = self.sessions_peers.get(opponent_id)
+                                {
+                                    commands.push(Message(
+                                        *opponent_peer_id,
+                                        ServerMessage::OpponentReady,
+                                    ))
                                 }
-                                Some(game_id) => {
-                                    let game = self.games.get(game_id).unwrap();
-                                    let opponent_id = &game.other_player(&player_id);
-                                    let opponent_nickname = self.sessions_nicknames.get(opponent_id).unwrap();
 
-                                    trace!("in game {:0>16X} - notifying opponent {}", game_id, opponent_nickname);
+                                let (
+                                    on_turn,
+                                    player_board_hits,
+                                    player_board_misses,
+                                    layout,
+                                    opponent_board_hits,
+                                    opponent_board_misses,
+                                    sunk_ships,
+                                ) = game.state(*player_id);
 
-                                    if let Some(opponent_peer_id) = self.sessions_peers.get(opponent_id) {
-                                        commands.push(Message(*opponent_peer_id, ServerMessage::OpponentReady))
-                                    }
-
-                                    let (
-                                        on_turn,
-                                        player_board_hits,
-                                        player_board_misses,
-                                        layout,
-                                        opponent_board_hits,
-                                        opponent_board_misses,
-                                        sunk_ships
-                                    ) = game.state(*player_id);
-
-                                    commands.push(Message(*peer_id, ServerMessage::LoginRestored(RestoreState::Game {
+                                commands.push(Message(
+                                    *peer_id,
+                                    ServerMessage::LoginRestored(RestoreState::Game {
                                         opponent: Nickname::new(opponent_nickname.clone()).unwrap(),
                                         on_turn,
                                         player_board_hits,
@@ -162,15 +179,19 @@ impl App {
                                         opponent_board_hits,
                                         opponent_board_misses,
                                         sunk_ships,
-                                    })));
-                                }
+                                    }),
+                                ));
                             }
                         }
-                    },
+                    }
                 }
-            }
+            },
             Some(_) => {
-                warn!("peer {:0>16X} is already logged in as {}", peer_id, nickname.get());
+                warn!(
+                    "peer {:0>16X} is already logged in as {}",
+                    peer_id,
+                    nickname.get()
+                );
                 commands.push(Message(*peer_id, ServerMessage::IllegalState));
             }
         }
@@ -184,7 +205,10 @@ impl App {
 
         match self.peers_sessions.get(peer_id).cloned() {
             Some(player_id) => {
-                debug!("player {} wants to join a game", self.sessions_nicknames.get(&player_id).unwrap());
+                debug!(
+                    "player {} wants to join a game",
+                    self.sessions_nicknames.get(&player_id).unwrap()
+                );
 
                 {
                     let last_active = self.last_active.get_mut(&player_id).unwrap();
@@ -197,7 +221,10 @@ impl App {
 
                         match self.pending_player {
                             None => {
-                                info!("no pending player - {} is set as pending player", self.sessions_nicknames.get(&player_id).unwrap());
+                                info!(
+                                    "no pending player - {} is set as pending player",
+                                    self.sessions_nicknames.get(&player_id).unwrap()
+                                );
 
                                 self.pending_player = Some(player_id);
 
@@ -205,7 +232,10 @@ impl App {
                             }
                             Some(opponent_id) => {
                                 if opponent_id == player_id {
-                                    warn!("{} is already waiting for a game", self.sessions_nicknames.get(&player_id).unwrap());
+                                    warn!(
+                                        "{} is already waiting for a game",
+                                        self.sessions_nicknames.get(&player_id).unwrap()
+                                    );
 
                                     commands.push(Message(*peer_id, ServerMessage::IllegalState));
                                 } else {
@@ -217,22 +247,40 @@ impl App {
                                     self.sessions_games.insert(opponent_id, game_id);
 
                                     let nickname = self.sessions_nicknames.get(&player_id).unwrap();
-                                    let opponent_nickname = self.sessions_nicknames.get(&opponent_id).unwrap();
+                                    let opponent_nickname =
+                                        self.sessions_nicknames.get(&opponent_id).unwrap();
 
-                                    info!("a pending player {} is present - creating a game with {}", opponent_nickname, nickname);
+                                    info!(
+                                        "a pending player {} is present - creating a game with {}",
+                                        opponent_nickname, nickname
+                                    );
                                     trace!("adding the game {:0>16X}", game_id);
                                     self.pending_player = None;
 
-                                    let opponent_peer_id = self.sessions_peers.get(&opponent_id).unwrap();
+                                    let opponent_peer_id =
+                                        self.sessions_peers.get(&opponent_id).unwrap();
 
-                                    commands.push(Message(*opponent_peer_id, ServerMessage::OpponentJoined(Nickname::new(nickname.clone()).unwrap())));
-                                    commands.push(Message(*peer_id, ServerMessage::JoinGameOk(Nickname::new(opponent_nickname.clone()).unwrap())));
+                                    commands.push(Message(
+                                        *opponent_peer_id,
+                                        ServerMessage::OpponentJoined(
+                                            Nickname::new(nickname.clone()).unwrap(),
+                                        ),
+                                    ));
+                                    commands.push(Message(
+                                        *peer_id,
+                                        ServerMessage::JoinGameOk(
+                                            Nickname::new(opponent_nickname.clone()).unwrap(),
+                                        ),
+                                    ));
                                 }
                             }
                         }
                     }
                     Some(_) => {
-                        warn!("{} is already in a game", self.sessions_nicknames.get(&player_id).unwrap());
+                        warn!(
+                            "{} is already in a game",
+                            self.sessions_nicknames.get(&player_id).unwrap()
+                        );
                         commands.push(Message(*peer_id, ServerMessage::IllegalState));
                     }
                 }
@@ -252,7 +300,10 @@ impl App {
 
         match self.peers_sessions.get(peer_id).cloned() {
             Some(player_id) => {
-                debug!("player {} wants to choose a game layout", self.sessions_nicknames.get(&player_id).unwrap());
+                debug!(
+                    "player {} wants to choose a game layout",
+                    self.sessions_nicknames.get(&player_id).unwrap()
+                );
                 trace!("layout: {}", layout);
                 {
                     let last_active = self.last_active.get_mut(&player_id).unwrap();
@@ -270,40 +321,58 @@ impl App {
                         let game = self.games.get_mut(game_id).unwrap();
 
                         if game.playing() {
-                            warn!("player {} is already playing - can't choose layout", self.sessions_nicknames.get(&player_id).unwrap());
+                            warn!(
+                                "player {} is already playing - can't choose layout",
+                                self.sessions_nicknames.get(&player_id).unwrap()
+                            );
 
                             commands.push(Message(*peer_id, ServerMessage::IllegalState))
                         } else {
                             match game.set_layout(player_id, layout) {
                                 Ok(_) => {
-                                    debug!("layout confirmed for the player {}", self.sessions_nicknames.get(&player_id).unwrap());
+                                    debug!(
+                                        "layout confirmed for the player {}",
+                                        self.sessions_nicknames.get(&player_id).unwrap()
+                                    );
 
                                     let opponent_id = game.other_player(&player_id);
-                                    let opponent_peer_id = self.sessions_peers.get(&opponent_id).unwrap();
+                                    let opponent_peer_id =
+                                        self.sessions_peers.get(&opponent_id).unwrap();
 
                                     commands.push(Message(*peer_id, ServerMessage::LayoutOk));
-                                    commands.push(Message(*opponent_peer_id, ServerMessage::OpponentReady));
+                                    commands.push(Message(
+                                        *opponent_peer_id,
+                                        ServerMessage::OpponentReady,
+                                    ));
                                 }
-                                Err(error) => {
-                                    match error {
-                                        GameError::AlreadyHasLayout => {
-                                            warn!("player {} has already a layout", self.sessions_nicknames.get(&player_id).unwrap());
-                                            commands.push(Message(*peer_id, ServerMessage::IllegalState))
-                                        }
-                                        GameError::InvalidLayout => {
-                                            warn!("player {} has invalid layout", self.sessions_nicknames.get(&player_id).unwrap());
-                                            commands.push(Message(*peer_id, ServerMessage::LayoutFail))
-                                        }
-                                        _ => {}
+                                Err(error) => match error {
+                                    GameError::AlreadyHasLayout => {
+                                        warn!(
+                                            "player {} has already a layout",
+                                            self.sessions_nicknames.get(&player_id).unwrap()
+                                        );
+                                        commands
+                                            .push(Message(*peer_id, ServerMessage::IllegalState))
                                     }
-                                }
+                                    GameError::InvalidLayout => {
+                                        warn!(
+                                            "player {} has invalid layout",
+                                            self.sessions_nicknames.get(&player_id).unwrap()
+                                        );
+                                        commands.push(Message(*peer_id, ServerMessage::LayoutFail))
+                                    }
+                                    _ => {}
+                                },
                             }
                         }
                     }
                 }
             }
             None => {
-                warn!("peer {:0>16X} is not logged - can't choose a layout", peer_id);
+                warn!(
+                    "peer {:0>16X} is not logged - can't choose a layout",
+                    peer_id
+                );
                 commands.push(Message(*peer_id, ServerMessage::IllegalState))
             }
         }
@@ -317,7 +386,10 @@ impl App {
 
         match self.peers_sessions.get(peer_id).cloned() {
             Some(player_id) => {
-                debug!("player {} wants to shoot", self.sessions_nicknames.get(&player_id).unwrap());
+                debug!(
+                    "player {} wants to shoot",
+                    self.sessions_nicknames.get(&player_id).unwrap()
+                );
                 trace!("position: {}", position);
 
                 {
@@ -327,7 +399,10 @@ impl App {
 
                 match self.sessions_games.get(&player_id) {
                     None => {
-                        warn!("player {} is not in a game - can't shoot", self.sessions_nicknames.get(&player_id).unwrap());
+                        warn!(
+                            "player {} is not in a game - can't shoot",
+                            self.sessions_nicknames.get(&player_id).unwrap()
+                        );
                         commands.push(Message(*peer_id, ServerMessage::IllegalState))
                     }
                     Some(game_id) => {
@@ -336,7 +411,10 @@ impl App {
                         let game = self.games.get_mut(game_id).unwrap();
 
                         if !game.playing() {
-                            warn!("player {} can't shoot while layouting", self.sessions_nicknames.get(&player_id).unwrap());
+                            warn!(
+                                "player {} can't shoot while layouting",
+                                self.sessions_nicknames.get(&player_id).unwrap()
+                            );
                             commands.push(Message(*peer_id, ServerMessage::IllegalState))
                         } else {
                             match game.shoot(player_id, position) {
@@ -347,47 +425,79 @@ impl App {
                                         ShootResult::Missed => {
                                             debug!("missed");
 
-                                            commands.push(Message(*peer_id, ServerMessage::ShootMissed));
-                                            if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_id) {
-                                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentMissed(position)));
+                                            commands.push(Message(
+                                                *peer_id,
+                                                ServerMessage::ShootMissed,
+                                            ));
+                                            if let Some(opponent_peer_id) =
+                                                self.sessions_peers.get(&opponent_id)
+                                            {
+                                                commands.push(Message(
+                                                    *opponent_peer_id,
+                                                    ServerMessage::OpponentMissed(position),
+                                                ));
                                             }
                                         }
                                         ShootResult::Hit => {
                                             debug!("hit");
 
-                                            commands.push(Message(*peer_id, ServerMessage::ShootHit));
-                                            if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_id) {
-                                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentHit(position)));
+                                            commands
+                                                .push(Message(*peer_id, ServerMessage::ShootHit));
+                                            if let Some(opponent_peer_id) =
+                                                self.sessions_peers.get(&opponent_id)
+                                            {
+                                                commands.push(Message(
+                                                    *opponent_peer_id,
+                                                    ServerMessage::OpponentHit(position),
+                                                ));
                                             }
                                         }
                                         ShootResult::Sunk(ship_kind, placement) => {
                                             debug!("sunk a ship {} at {}", ship_kind, placement);
 
-                                            commands.push(Message(*peer_id, ServerMessage::ShootSunk(ship_kind, placement)));
-                                            if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_id) {
-                                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentHit(position)));
+                                            commands.push(Message(
+                                                *peer_id,
+                                                ServerMessage::ShootSunk(ship_kind, placement),
+                                            ));
+                                            if let Some(opponent_peer_id) =
+                                                self.sessions_peers.get(&opponent_id)
+                                            {
+                                                commands.push(Message(
+                                                    *opponent_peer_id,
+                                                    ServerMessage::OpponentHit(position),
+                                                ));
                                             }
                                         }
                                     }
 
                                     if let Some(winner) = game.winner() {
-                                        info!("{} vs {} - game over, winner: {}",
-                                              self.sessions_nicknames.get(&player_id).unwrap(),
-                                              self.sessions_nicknames.get(&opponent_id).unwrap(),
-                                              self.sessions_nicknames.get(&winner).unwrap());
+                                        info!(
+                                            "{} vs {} - game over, winner: {}",
+                                            self.sessions_nicknames.get(&player_id).unwrap(),
+                                            self.sessions_nicknames.get(&opponent_id).unwrap(),
+                                            self.sessions_nicknames.get(&winner).unwrap()
+                                        );
 
                                         commands.push(Message(
                                             *peer_id,
-                                            ServerMessage::GameOver(
-                                                if winner == player_id { Who::You } else { Who::Opponent }
-                                            )));
+                                            ServerMessage::GameOver(if winner == player_id {
+                                                Who::You
+                                            } else {
+                                                Who::Opponent
+                                            }),
+                                        ));
 
-                                        if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_id) {
+                                        if let Some(opponent_peer_id) =
+                                            self.sessions_peers.get(&opponent_id)
+                                        {
                                             commands.push(Message(
                                                 *opponent_peer_id,
-                                                ServerMessage::GameOver(
-                                                    if winner == opponent_id { Who::You } else { Who::Opponent }
-                                                )));
+                                                ServerMessage::GameOver(if winner == opponent_id {
+                                                    Who::You
+                                                } else {
+                                                    Who::Opponent
+                                                }),
+                                            ));
                                         }
 
                                         trace!("removing the game {:0>16X}", game_id);
@@ -398,7 +508,10 @@ impl App {
                                     }
                                 }
                                 Err(_) => {
-                                    warn!("player {} is not on turn", self.sessions_nicknames.get(&player_id).unwrap());
+                                    warn!(
+                                        "player {} is not on turn",
+                                        self.sessions_nicknames.get(&player_id).unwrap()
+                                    );
                                     commands.push(Message(*peer_id, ServerMessage::IllegalState))
                                 }
                             }
@@ -421,38 +534,47 @@ impl App {
 
         match self.peers_sessions.get(peer_id).cloned() {
             Some(player_id) => {
-                debug!("player {} wants to leave the game", self.sessions_nicknames.get(&player_id).unwrap());
+                debug!(
+                    "player {} wants to leave the game",
+                    self.sessions_nicknames.get(&player_id).unwrap()
+                );
                 {
                     let last_active = self.last_active.get_mut(&player_id).unwrap();
                     *last_active = Instant::now();
                 }
 
                 match self.sessions_games.get(&player_id) {
-                    None => {
-                        match self.pending_player {
-                            None => {
-                                warn!("player {} is not in a game - can't leave any", self.sessions_nicknames.get(&player_id).unwrap());
+                    None => match self.pending_player {
+                        None => {
+                            warn!(
+                                "player {} is not in a game - can't leave any",
+                                self.sessions_nicknames.get(&player_id).unwrap()
+                            );
 
-                                commands.push(Message(*peer_id, ServerMessage::IllegalState))
-                            }
-                            Some(pending_player_id) => {
-                                if pending_player_id == player_id {
-                                    info!("removing player {} from game pending queue", self.sessions_nicknames.get(&player_id).unwrap());
+                            commands.push(Message(*peer_id, ServerMessage::IllegalState))
+                        }
+                        Some(pending_player_id) => {
+                            if pending_player_id == player_id {
+                                info!(
+                                    "removing player {} from game pending queue",
+                                    self.sessions_nicknames.get(&player_id).unwrap()
+                                );
 
-                                    self.pending_player = None;
+                                self.pending_player = None;
 
-                                    commands.push(Message(*peer_id, ServerMessage::LeaveGameOk));
-                                }
+                                commands.push(Message(*peer_id, ServerMessage::LeaveGameOk));
                             }
                         }
-                    }
+                    },
                     Some(game_id) => {
                         let game = self.games.remove(game_id).unwrap();
                         let opponent_id = &game.other_player(&player_id);
 
-                        info!("removing player {} from game with {}",
-                              self.sessions_nicknames.get(&player_id).unwrap(),
-                              self.sessions_nicknames.get(opponent_id).unwrap());
+                        info!(
+                            "removing player {} from game with {}",
+                            self.sessions_nicknames.get(&player_id).unwrap(),
+                            self.sessions_nicknames.get(opponent_id).unwrap()
+                        );
                         trace!("notifying opponent");
 
                         self.sessions_games.remove(&player_id);
@@ -485,14 +607,20 @@ impl App {
                 commands.push(Message(*peer_id, ServerMessage::IllegalState))
             }
             Some(player_id) => {
-                info!("logging out the player {}", self.sessions_nicknames.get(&player_id).unwrap());
+                info!(
+                    "logging out the player {}",
+                    self.sessions_nicknames.get(&player_id).unwrap()
+                );
 
                 // handle if the session is in any game
                 match self.sessions_games.get(&player_id) {
                     None => {
                         if let Some(pending_player_id) = self.pending_player {
                             if pending_player_id == player_id {
-                                info!("removing player {} from game pending queue", self.sessions_nicknames.get(&player_id).unwrap());
+                                info!(
+                                    "removing player {} from game pending queue",
+                                    self.sessions_nicknames.get(&player_id).unwrap()
+                                );
                                 self.pending_player = None;
                             }
                         } else {
@@ -503,9 +631,11 @@ impl App {
                         let game = self.games.remove(&game_id).unwrap();
                         let opponent_id = game.other_player(&player_id);
 
-                        info!("removing player {} from game with {}",
-                              self.sessions_nicknames.get(&player_id).unwrap(),
-                              self.sessions_nicknames.get(&opponent_id).unwrap());
+                        info!(
+                            "removing player {} from game with {}",
+                            self.sessions_nicknames.get(&player_id).unwrap(),
+                            self.sessions_nicknames.get(&opponent_id).unwrap()
+                        );
                         trace!("notifying opponent");
 
                         self.sessions_games.remove(&player_id);
@@ -517,7 +647,8 @@ impl App {
                     }
                 }
 
-                self.nicknames_sessions.remove(self.sessions_nicknames.get(&player_id).unwrap());
+                self.nicknames_sessions
+                    .remove(self.sessions_nicknames.get(&player_id).unwrap());
                 self.sessions_nicknames.remove(&player_id);
                 self.sessions_peers.remove(&player_id);
                 self.peers_sessions.remove(&peer_id);
@@ -539,15 +670,20 @@ impl App {
                 //
             }
             Some(player_id) => {
-                info!("player {} is offline", self.sessions_nicknames.get(&player_id).unwrap());
+                info!(
+                    "player {} is offline",
+                    self.sessions_nicknames.get(&player_id).unwrap()
+                );
 
                 // handle if the session is in any game
                 match self.sessions_games.get(&player_id).cloned() {
                     None => {
-
                         if let Some(pending_player_id) = self.pending_player {
                             if pending_player_id == player_id {
-                                info!("removing player {} from game pending queue", self.sessions_nicknames.get(&player_id).unwrap());
+                                info!(
+                                    "removing player {} from game pending queue",
+                                    self.sessions_nicknames.get(&player_id).unwrap()
+                                );
                                 self.pending_player = None;
                             }
                         } else {
@@ -559,9 +695,11 @@ impl App {
                         let opponent_id = game.other_player(&player_id);
 
                         if !game.playing() {
-                            info!("removing player {} from the non-started game with {}",
-                                  self.sessions_nicknames.get(&player_id).unwrap(),
-                                  self.sessions_nicknames.get(&opponent_id).unwrap());
+                            info!(
+                                "removing player {} from the non-started game with {}",
+                                self.sessions_nicknames.get(&player_id).unwrap(),
+                                self.sessions_nicknames.get(&opponent_id).unwrap()
+                            );
                             trace!("notifying opponent");
 
                             self.sessions_games.remove(&player_id);
@@ -569,13 +707,20 @@ impl App {
                             self.games.remove(&game_id);
 
                             if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_id) {
-                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentLeft))
+                                commands
+                                    .push(Message(*opponent_peer_id, ServerMessage::OpponentLeft))
                             }
                         } else {
-                            trace!("in the game with {} - notifying", self.sessions_nicknames.get(&opponent_id).unwrap());
+                            trace!(
+                                "in the game with {} - notifying",
+                                self.sessions_nicknames.get(&opponent_id).unwrap()
+                            );
 
                             if let Some(opponent_peer_id) = self.sessions_peers.get(&opponent_id) {
-                                commands.push(Message(*opponent_peer_id, ServerMessage::OpponentOffline))
+                                commands.push(Message(
+                                    *opponent_peer_id,
+                                    ServerMessage::OpponentOffline,
+                                ))
                             }
                         }
                     }
@@ -595,16 +740,19 @@ impl App {
 
         let now = Instant::now();
 
-        let to_remove = self.last_active.iter().filter_map(|(player_id, last_active)| {
-            let inactive = now.duration_since(*last_active);
+        let to_remove = self
+            .last_active
+            .iter()
+            .filter_map(|(player_id, last_active)| {
+                let inactive = now.duration_since(*last_active);
 
-            if inactive >= self.session_timeout {
-                Some(*player_id)
-            } else {
-                None
-            }
-
-        }).collect::<Vec<_>>();
+                if inactive >= self.session_timeout {
+                    Some(*player_id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
 
         to_remove.iter().for_each(|player_id| {
             let nickname = self.sessions_nicknames.get(player_id).unwrap();
@@ -624,7 +772,10 @@ impl App {
                 None => {
                     if let Some(pending_player_id) = self.pending_player {
                         if pending_player_id == *player_id {
-                            info!("removing player {} from game pending queue", self.sessions_nicknames.get(&player_id).unwrap());
+                            info!(
+                                "removing player {} from game pending queue",
+                                self.sessions_nicknames.get(&player_id).unwrap()
+                            );
                             self.pending_player = None;
                         }
                     } else {
@@ -635,9 +786,11 @@ impl App {
                     let game = self.games.remove(&game_id).unwrap();
                     let opponent_id = game.other_player(player_id);
 
-                    info!("removing player {} from game with {}",
-                          self.sessions_nicknames.get(&player_id).unwrap(),
-                          self.sessions_nicknames.get(&opponent_id).unwrap());
+                    info!(
+                        "removing player {} from game with {}",
+                        self.sessions_nicknames.get(&player_id).unwrap(),
+                        self.sessions_nicknames.get(&opponent_id).unwrap()
+                    );
                     trace!("notifying opponent");
 
                     self.sessions_games.remove(&player_id);
@@ -660,7 +813,10 @@ impl App {
         let mut commands = Vec::new();
 
         for (player_id, peer_id) in self.sessions_peers.drain() {
-            debug!("notifying player {} about disconnection", self.sessions_nicknames.get(&player_id).unwrap());
+            debug!(
+                "notifying player {} about disconnection",
+                self.sessions_nicknames.get(&player_id).unwrap()
+            );
             commands.push(Message(peer_id, ServerMessage::Disconnect));
         }
 

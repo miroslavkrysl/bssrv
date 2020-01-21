@@ -1,10 +1,10 @@
 use crate::net::listener::Listener;
-use std::collections::HashMap;
 use crate::net::peer::Peer;
 use rand::Rng;
-use std::net::SocketAddr;
-use std::io;
 use std::collections::hash_map;
+use std::collections::HashMap;
+use std::io;
+use std::net::SocketAddr;
 
 pub struct Server {
     listener: Listener,
@@ -13,11 +13,11 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(address: SocketAddr) -> io::Result<Self>{
+    pub fn new(address: SocketAddr) -> io::Result<Self> {
         Ok(Server {
             listener: Listener::new(address)?,
             listener_id: 0,
-            peers: HashMap::new()
+            peers: HashMap::new(),
         })
     }
 
@@ -26,7 +26,7 @@ impl Server {
         loop {
             let id = rand::thread_rng().gen();
             if id != self.listener_id && !self.peers.contains_key(&id) {
-                break id
+                break id;
             }
         }
     }

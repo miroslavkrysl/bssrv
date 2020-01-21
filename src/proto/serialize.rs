@@ -1,6 +1,9 @@
+use crate::proto::codec::{escape, Payload, ESCAPE, MESSAGE_END, PAYLOAD_START};
 use crate::proto::ServerMessage;
-use crate::proto::codec::{Payload, escape, MESSAGE_END, ESCAPE, PAYLOAD_START};
-use crate::types::{Nickname, ShipKind, Position, Orientation, Placement, RestoreState, Hits, Who, ShipsPlacements, Layout};
+use crate::types::{
+    Hits, Layout, Nickname, Orientation, Placement, Position, RestoreState, ShipKind,
+    ShipsPlacements, Who,
+};
 use std::convert::TryInto;
 
 // ---Stream serialize---
@@ -9,14 +12,14 @@ use std::convert::TryInto;
 /// into a stream of bytes into the internal buffer which
 /// can be read and be cleared.
 pub struct Serializer {
-    byte_buffer: Vec<u8>
+    byte_buffer: Vec<u8>,
 }
 
 impl Serializer {
     /// Create a new Serializer.
     pub fn new() -> Self {
         Serializer {
-            byte_buffer: Vec::new()
+            byte_buffer: Vec::new(),
         }
     }
 
@@ -51,7 +54,6 @@ impl Serializer {
     }
 }
 
-
 // ---Message serialize---
 
 impl ServerMessage {
@@ -63,7 +65,7 @@ impl ServerMessage {
         match self {
             ServerMessage::IllegalState => {
                 serialized.push_str("illegal_state");
-            },
+            }
             ServerMessage::AliveOk => {
                 serialized.push_str("alive_ok");
             }
@@ -180,7 +182,6 @@ impl SerializeIntoPayload for Position {
     }
 }
 
-
 impl SerializeIntoPayload for Orientation {
     fn serialize(&self, payload: &mut Payload) {
         match self {
@@ -236,7 +237,7 @@ impl SerializeIntoPayload for RestoreState {
         match self {
             RestoreState::Lobby => {
                 payload.put_string(String::from("lobby"));
-            },
+            }
             RestoreState::Game {
                 opponent,
                 on_turn,
@@ -245,7 +246,7 @@ impl SerializeIntoPayload for RestoreState {
                 layout,
                 opponent_board_hits,
                 opponent_board_misses,
-                sunk_ships
+                sunk_ships,
             } => {
                 payload.put_string(String::from("game"));
                 opponent.serialize(payload);
@@ -256,7 +257,7 @@ impl SerializeIntoPayload for RestoreState {
                 opponent_board_hits.serialize(payload);
                 opponent_board_misses.serialize(payload);
                 sunk_ships.serialize(payload);
-            },
+            }
         };
     }
 }

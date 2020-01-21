@@ -1,9 +1,9 @@
 //! Battleships protocol communication messages
 //! and their serialization and serialization logic.
 
-mod message;
 mod codec;
 mod deserialize;
+mod message;
 mod serialize;
 
 pub use message::ClientMessage;

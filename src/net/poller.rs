@@ -1,9 +1,9 @@
-use mio::{Poll, Events, Token};
-use std::io;
 use crate::net::listener::Listener;
 use crate::net::peer::Peer;
-use std::time::Duration;
+use mio::{Events, Poll, Token};
 use std::collections::HashSet;
+use std::io;
+use std::time::Duration;
 
 /// An event which can happen on a listener or a peer.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -13,7 +13,7 @@ pub enum PollEvent {
     /// Peer with the particular id has incoming data ready to be read.
     Read(usize),
     /// Peer with the particular id can be written into.
-    Write(usize)
+    Write(usize),
 }
 
 /// Polls for readiness events on all registered listeners and peers.
@@ -31,7 +31,7 @@ impl Poller {
             poll: Poll::new()?,
             events: Events::with_capacity(capacity),
             listeners: HashSet::new(),
-            peers: HashSet::new()
+            peers: HashSet::new(),
         })
     }
 
@@ -49,7 +49,10 @@ impl Poller {
     /// Deregister a listener from polling.
     pub fn deregister_listener(&mut self, listener: &Listener, id: &usize) -> io::Result<()> {
         if !self.listeners.remove(id) {
-            panic!("listener with id {} is not present in this poller instance", id);
+            panic!(
+                "listener with id {} is not present in this poller instance",
+                id
+            );
         }
 
         listener.deregister(&self.poll)?;
@@ -80,7 +83,10 @@ impl Poller {
     /// Deregister a peer from polling.
     pub fn deregister_peer(&mut self, peer: &Peer, id: &usize) -> io::Result<()> {
         if !self.peers.remove(id) {
-            panic!("listener with id {} is not present in this poller instance", id);
+            panic!(
+                "listener with id {} is not present in this poller instance",
+                id
+            );
         }
 
         peer.deregister(&self.poll)?;
@@ -89,7 +95,11 @@ impl Poller {
 
     /// Poll for events on registered listeners and peers.
     /// Events is stored in the provided vector, which is cleared before.
-    pub fn poll(&mut self, events: &mut Vec<PollEvent>, timeout: Option<Duration>) -> io::Result<()> {
+    pub fn poll(
+        &mut self,
+        events: &mut Vec<PollEvent>,
+        timeout: Option<Duration>,
+    ) -> io::Result<()> {
         // clear events list from previous call
         events.clear();
 
@@ -118,7 +128,7 @@ impl Poller {
                 // sporadic events happen
             }
         }
-        
+
         Ok(())
     }
 }

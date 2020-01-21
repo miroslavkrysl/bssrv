@@ -1,14 +1,14 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::fmt;
 use std::collections::HashMap;
+use std::error::Error;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum DomainErrorKind {
     InvalidLength,
     InvalidCharacters,
     InvalidCombination,
-    OutOfRange
+    OutOfRange,
 }
 
 /// An error indicating that a value is out of its domain.
@@ -23,10 +23,7 @@ pub struct DomainError {
 impl DomainError {
     /// Create new domain error of given kind and a message which describes the cause.
     pub fn new(kind: DomainErrorKind, because: String) -> Self {
-        DomainError {
-            kind,
-            because,
-        }
+        DomainError { kind, because }
     }
 }
 
@@ -35,14 +32,15 @@ impl Display for DomainError {
         match self.kind {
             DomainErrorKind::InvalidLength => write!(f, "Invalid length: {}", self.because),
             DomainErrorKind::InvalidCharacters => write!(f, "Invalid characters: {}", self.because),
-            DomainErrorKind::InvalidCombination => write!(f, "Invalid combination: {}", self.because),
-            DomainErrorKind::OutOfRange => write!(f, "Out of range: {}", self.because)
+            DomainErrorKind::InvalidCombination => {
+                write!(f, "Invalid combination: {}", self.because)
+            }
+            DomainErrorKind::OutOfRange => write!(f, "Out of range: {}", self.because),
         }
     }
 }
 
 impl Error for DomainError {}
-
 
 // ---Nickname---
 
@@ -57,17 +55,17 @@ impl Nickname {
     pub fn new(nickname: String) -> Result<Self, DomainError> {
         let len = nickname.chars().count();
         if len < 3 || len > 32 {
-            return Err(
-                DomainError::new(
-                    DomainErrorKind::InvalidLength,
-                    format!("Nickname must have 3 - 16 characters, but has {}.", len)));
+            return Err(DomainError::new(
+                DomainErrorKind::InvalidLength,
+                format!("Nickname must have 3 - 16 characters, but has {}.", len),
+            ));
         }
 
         if !nickname.chars().all(|c| c.is_alphanumeric()) {
-            return Err(
-                DomainError::new(
-                    DomainErrorKind::InvalidCharacters,
-                    String::from("Nickname must contain only alphanumeric characters.")));
+            return Err(DomainError::new(
+                DomainErrorKind::InvalidCharacters,
+                String::from("Nickname must contain only alphanumeric characters."),
+            ));
         }
 
         Ok(Nickname { nickname })
@@ -84,7 +82,6 @@ impl Display for Nickname {
     }
 }
 
-
 // ---ShipKind---
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -93,7 +90,7 @@ pub enum ShipKind {
     Battleship,
     Cruiser,
     Destroyer,
-    PatrolBoat
+    PatrolBoat,
 }
 
 impl ShipKind {
@@ -131,23 +128,20 @@ pub struct Position {
 impl Position {
     pub fn new(row: u8, col: u8) -> Result<Self, DomainError> {
         if row >= 10 {
-            return Err(
-                DomainError::new(
-                    DomainErrorKind::OutOfRange,
-                    format!("Position row must be between 0 - 9. {} given.", row)));
+            return Err(DomainError::new(
+                DomainErrorKind::OutOfRange,
+                format!("Position row must be between 0 - 9. {} given.", row),
+            ));
         }
 
         if row >= 10 {
-            return Err(
-                DomainError::new(
-                    DomainErrorKind::OutOfRange,
-                    format!("Position col must be between 0 - 9. {} given.", col)));
+            return Err(DomainError::new(
+                DomainErrorKind::OutOfRange,
+                format!("Position col must be between 0 - 9. {} given.", col),
+            ));
         }
 
-        Ok(Position {
-            row,
-            col,
-        })
+        Ok(Position { row, col })
     }
 
     pub fn row(&self) -> u8 {
@@ -158,7 +152,6 @@ impl Position {
         self.col
     }
 }
-
 
 impl Display for Position {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
@@ -187,7 +180,6 @@ impl Display for Orientation {
     }
 }
 
-
 // ---Who---
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -200,7 +192,7 @@ impl Display for Who {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             Who::You => write!(f, "you"),
-            Who::Opponent => write!(f, "opponent")
+            Who::Opponent => write!(f, "opponent"),
         }
     }
 }
@@ -215,7 +207,10 @@ pub struct Placement {
 
 impl Placement {
     pub fn new(position: Position, orientation: Orientation) -> Self {
-        Placement { position, orientation }
+        Placement {
+            position,
+            orientation,
+        }
     }
 
     pub fn position(&self) -> Position {
@@ -233,21 +228,23 @@ impl Display for Placement {
     }
 }
 
-
 // ---Layout---
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Layout {
-    placements: ShipsPlacements
+    placements: ShipsPlacements,
 }
 
 impl Layout {
     pub fn new(placements: ShipsPlacements) -> Result<Self, DomainError> {
         if placements.len() != 5 {
-            return Err(
-                DomainError::new(
-                    DomainErrorKind::InvalidLength,
-                    format!("Layout must have exactly 5 placements, but has {}.", placements.len())));
+            return Err(DomainError::new(
+                DomainErrorKind::InvalidLength,
+                format!(
+                    "Layout must have exactly 5 placements, but has {}.",
+                    placements.len()
+                ),
+            ));
         }
 
         Ok(Layout { placements })
@@ -272,19 +269,19 @@ impl Layout {
                 Orientation::East => {
                     inc_r = 0;
                     inc_c = 1;
-                },
+                }
                 Orientation::North => {
                     inc_r = -1;
                     inc_c = 0;
-                },
+                }
                 Orientation::West => {
                     inc_r = 0;
                     inc_c = -1;
-                },
+                }
                 Orientation::South => {
                     inc_r = 1;
                     inc_c = 0;
-                },
+                }
             }
 
             // mark ship cells
@@ -296,7 +293,7 @@ impl Layout {
 
                 if board[row as usize][col as usize] {
                     // occupied
-                    return false
+                    return false;
                 }
 
                 board[row as usize][col as usize] = true;
@@ -313,7 +310,7 @@ impl Layout {
                     } else {
                         if board[r as usize][c as usize] {
                             // neighbor occupied
-                            return false
+                            return false;
                         }
                     }
                 }
@@ -330,7 +327,7 @@ impl Layout {
                     } else {
                         if board[r as usize][c as usize] {
                             // neighbor occupied
-                            return false
+                            return false;
                         }
                     }
                 }
@@ -355,7 +352,7 @@ impl Layout {
                 } else {
                     if board[r1 as usize][c1 as usize] {
                         // neighbor occupied
-                        return false
+                        return false;
                     }
                 }
 
@@ -364,10 +361,9 @@ impl Layout {
                 } else {
                     if board[r2 as usize][c2 as usize] {
                         // neighbor occupied
-                        return false
+                        return false;
                     }
                 }
-
 
                 row += inc_r;
                 col += inc_c;
@@ -384,12 +380,11 @@ impl Display for Layout {
     }
 }
 
-
 // ---SunkShips---
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ShipsPlacements {
-    placements: HashMap<ShipKind, Placement>
+    placements: HashMap<ShipKind, Placement>,
 }
 
 impl ShipsPlacements {
@@ -400,7 +395,7 @@ impl ShipsPlacements {
     pub fn placements(&self) -> &HashMap<ShipKind, Placement> {
         &self.placements
     }
-    
+
     pub fn len(&self) -> usize {
         self.placements.len()
     }
@@ -411,9 +406,13 @@ impl Display for ShipsPlacements {
         let mut string = String::from("{");
 
         string.push_str(
-            &self.placements.iter()
+            &self
+                .placements
+                .iter()
                 .map(|(k, p)| format!("{} {}", k, p))
-                .collect::<Vec<_>>().join(", "));
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
 
         string.push_str("}");
 
@@ -421,19 +420,16 @@ impl Display for ShipsPlacements {
     }
 }
 
-
 // ---Hits---
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hits {
-    positions: Vec<Position>
+    positions: Vec<Position>,
 }
 
 impl Hits {
     pub fn new(positions: Vec<Position>) -> Self {
-        Hits {
-            positions
-        }
+        Hits { positions }
     }
 
     pub fn positions(&self) -> &Vec<Position> {
@@ -446,16 +442,19 @@ impl Display for Hits {
         let mut string = String::from("{");
 
         string.push_str(
-            &self.positions.iter()
+            &self
+                .positions
+                .iter()
                 .map(|p| format!("{}", p))
-                .collect::<Vec<_>>().join(", "));
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
 
         string.push_str("}");
 
         write!(f, "{}", string)
     }
 }
-
 
 // ---RestoreState---
 
@@ -470,8 +469,8 @@ pub enum RestoreState {
         layout: Layout,
         opponent_board_hits: Hits,
         opponent_board_misses: Hits,
-        sunk_ships: ShipsPlacements
-    }
+        sunk_ships: ShipsPlacements,
+    },
 }
 
 impl Display for RestoreState {
@@ -486,16 +485,19 @@ impl Display for RestoreState {
                 layout,
                 opponent_board_hits,
                 opponent_board_misses,
+                sunk_ships,
+            } => write!(
+                f,
+                "game ({}, {}, {}, {}, {}, {}, {}, {})",
+                opponent,
+                on_turn,
+                player_board_hits,
+                player_board_misses,
+                layout,
+                opponent_board_hits,
+                opponent_board_misses,
                 sunk_ships
-            } => write!(f, "game ({}, {}, {}, {}, {}, {}, {}, {})",
-                        opponent,
-                        on_turn,
-                        player_board_hits,
-                        player_board_misses,
-                        layout,
-                        opponent_board_hits,
-                        opponent_board_misses,
-                        sunk_ships)
+            ),
         }
     }
 }
